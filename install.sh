@@ -48,7 +48,9 @@ if [ -d "$src/helper" ]; then
     [ -e "$f" ] || continue
     cp -R "$f" "$home/bin/"
   done
-  cp "$out/herdr-sim" "$home/bin/herdr-sim"
+  # A new file, renamed into place: overwriting a running binary in place can get it killed (code signature).
+  cp "$out/herdr-sim" "$home/bin/.herdr-sim.new"
+  mv -f "$home/bin/.herdr-sim.new" "$home/bin/herdr-sim"
   echo "Installed the helper: $home/bin/herdr-sim"
 fi
 
