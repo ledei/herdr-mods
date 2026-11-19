@@ -6,7 +6,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { theme, checking, layout, run, focused, panes, appHome, exec, readTextFile, notify, nextCommand } from "herdr";
+import { theme, checking, props, layout, run, focused, panes, appHome, exec, readTextFile, notify, nextCommand } from "herdr";
 import net from "net";
 
 const ICON = (name) => `mods/ios-sim/${name}.svg`;
@@ -43,6 +43,7 @@ const NAMED = { enter: 40, escape: 41, backspace: 42, tab: 43, space: 44, home: 
 const PUNCT = [["-", "_", 45], ["=", "+", 46], ["[", "{", 47], ["]", "}", 48], ["\\", "|", 49], [";", ":", 51], ["'", "\"", 52], ["`", "~", 53], [",", "<", 54], [".", ">", 55], ["/", "?", 56]];
 function hidKey(key) {
   if (NAMED[key]) return [NAMED[key], false];
+  if (key === " ") return [44, false];
   if ([...key].length !== 1) return null;
   if (/[a-z]/.test(key)) return [4 + key.charCodeAt(0) - 97, false];
   if (/[A-Z]/.test(key)) return [4 + key.charCodeAt(0) - 65, true];
@@ -82,7 +83,7 @@ export default class IosSim extends View {
   init(_props, cx) {
     this.tag = "c" + Math.floor(Math.random() * 1e9).toString(36);
     this.devices = null; // null: not listed yet
-    this.udid = saved();
+    this.udid = props()?.udid ?? saved(); // a layout block can pin a device with props {udid}
     this.attached = null; // {udid, width, height}: the helper streams this device
     this.rotation = "upright";
     this.ended = false; // the stream ended; Try now attaches again
@@ -185,7 +186,9 @@ export default class IosSim extends View {
     switch (m.ev) {
       case "devices": {
         this.devices = (m.devices ?? []).sort(order);
-        if (!this.device()) this.udid = this.devices.find(booted)?.udid ?? null;
+        // Only a lone booted device is chosen for you: other booted ones may be someone else's work.
+        const on = this.devices.filter(booted);
+        if (!this.device()) this.udid = on.length === 1 ? on[0].udid : null;
         this.attach();
         break;
       }
@@ -398,7 +401,7 @@ export default class IosSim extends View {
       cx.notify();
       return cx.stop_propagation();
     }
-    const hid = this.live() && !this.annotating ? hidKey(e.key_char && [...e.key_char].length === 1 ? e.key_char : e.key) : null;
+    const hid = this.live() && !this.annotating ? hidKey(e.key) ?? (e.key_char ? hidKey(e.key_char) : null) : null;
     if (!hid) return;
     cx.stop_propagation();
     // A whole press per key down: a key released elsewhere can't stay down on the device.
