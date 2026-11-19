@@ -452,13 +452,13 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
   private var target: CGWindowID = 0
   private var host = CGRect.null
   private var hostOn = false
-  private var sizeChangedAt = -1.0
+  private var resizedAt = -1.0
+  private var genie = false  // the window changed size with no corner kept: minimize or restore is playing
   private var lastFind = 0.0
   // the mod's copies
   private struct Copy { var seq = -Double.infinity, edges: [Double]?, live = 0.0, hidden = false }
   private var copies: [String: Copy] = [:]
   private var lastTag: String?
-  private var edgesAt = -1.0
   private var shown = false
   // the device
   private(set) var hid: HIDQueue?
@@ -554,7 +554,6 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
       cp.hidden = false
       copies[tag] = cp
       lastTag = tag
-      edgesAt = now()
       if let radius = num("radius") { view.layer!.cornerRadius = radius }
       apply()
     case "lease":
@@ -709,10 +708,16 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
       }
     }
     let on = d?.on == true, b = d?.frame ?? .null
-    if on && hostOn && b.size != host.size { sizeChangedAt = t }
+    if on && !host.isNull && b.size != host.size {
+      // A live resize keeps the opposite corner where it was; the genie moves all four. Only the genie hides the panel,
+      // so a resize the mod sends no edges for (its block keeps its size) is followed by the anchored edges alone.
+      let corners = { (r: CGRect) in [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)] }
+      if !corners(b).contains(where: corners(host).contains) { genie = true }
+      resizedAt = t
+    }
+    if genie && t - resizedAt >= 0.15 { genie = false }
     hostOn = on
     if on { host = b }
-    copies = copies.filter { t - $0.value.live < 5 }
     apply()
   }
 
@@ -721,10 +726,8 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
     let t = now()
     let live = copies.filter { !$0.value.hidden && $0.value.edges != nil && t - $0.value.live < 0.6 }
     let tag = lastTag.flatMap { live[$0] != nil ? $0 : nil } ?? live.max { $0.value.live < $1.value.live }?.key
-    // The window's size changed and no layout pass followed: the minimize genie (or a resize the mod has not caught up with).
-    let animating = t - sizeChangedAt < 0.15 && edgesAt < sizeChangedAt - 0.1
     var want: CGRect?
-    if let tag, let e = copies[tag]?.edges, hostOn, !animating, hid != nil {
+    if let tag, let e = copies[tag]?.edges, hostOn, !genie, hid != nil {
       let x0 = host.width * e[0] + e[1], y0 = host.height * e[2] + e[3]
       let x1 = host.width * e[4] + e[5], y1 = host.height * e[6] + e[7]
       if x1 - x0 >= 1 && y1 - y0 >= 1 { want = CGRect(x: host.minX + x0, y: host.minY + y0, width: x1 - x0, height: y1 - y0) }

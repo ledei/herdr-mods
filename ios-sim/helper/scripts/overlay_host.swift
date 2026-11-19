@@ -2,6 +2,7 @@
 // (accessory app, ordered to the back). One command per stdin line, one JSON line back:
 //   frame x y w h             move/resize the window (CG global, top-left origin)
 //   hide | show               order the window out / back in
+//   minimize                  minimize the window (to the Dock, with the genie)
 //   where <pid>               the window's CG frame, <pid>'s on-screen windows, and the window directly above ours
 //   diff <a.png> <b.png> turns x y w h   mean difference of a's crop (pixels) against b turned clockwise
 //                                        `turns` quarter turns, and against b turned the other way
@@ -12,7 +13,7 @@ import AppKit
 setvbuf(stdout, nil, _IOLBF, 0)
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
-let w = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 700, height: 800), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+let w = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 700, height: 800), styleMask: [.titled, .resizable, .miniaturizable], backing: .buffered, defer: false)
 w.title = "overlay_check host"
 w.backgroundColor = .systemTeal
 w.isReleasedWhenClosed = false
@@ -40,10 +41,22 @@ func samples(_ path: String, crop: CGRect?, turns: Int) -> [Double]? {
   return px.map { Double($0) }
 }
 
+let window = w.windowNumber
 Thread.detachNewThread {
   reply(["ready": true, "pid": Int(getpid()), "window": w.windowNumber])
   while let line = readLine() {
     let p = line.split(separator: " ").map(String.init)
+    if p.first == "where" {  // off the main thread, which the minimize animation can hold
+      let pid = Int(p[1])!
+      let me = CGWindowID(window)
+      let all = info([.optionOnScreenOnly], kCGNullWindowID)
+      let host = all.first { ($0[kCGWindowNumber as String] as? Int) == Int(me) }
+      let theirs = all.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid }
+      let above = info([.optionOnScreenAboveWindow], me).last?[kCGWindowNumber as String] as? Int
+      reply(["host": host.map { bounds($0) as Any } ?? NSNull(), "windows": theirs.map { ["id": $0[kCGWindowNumber as String] as! Int, "bounds": bounds($0)] },
+             "above": above.map { $0 as Any } ?? NSNull()])
+      continue
+    }
     DispatchQueue.main.sync {
       switch p.first {
       case "frame":
@@ -52,15 +65,7 @@ Thread.detachNewThread {
         reply(["ok": true])
       case "hide": w.orderOut(nil); reply(["ok": true])
       case "show": w.orderBack(nil); reply(["ok": true])
-      case "where":
-        let pid = Int(p[1])!
-        let me = CGWindowID(w.windowNumber)
-        let all = info([.optionOnScreenOnly], kCGNullWindowID)
-        let host = all.first { ($0[kCGWindowNumber as String] as? Int) == Int(me) }
-        let theirs = all.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid }
-        let above = info([.optionOnScreenAboveWindow], me).last?[kCGWindowNumber as String] as? Int
-        reply(["host": host.map { bounds($0) as Any } ?? NSNull(), "windows": theirs.map { ["id": $0[kCGWindowNumber as String] as! Int, "bounds": bounds($0)] },
-               "above": above.map { $0 as Any } ?? NSNull()])
+      case "minimize": DispatchQueue.main.async { w.miniaturize(nil) }; reply(["ok": true])  // never restored: the test quits after
       case "diff":
         let n = p.suffix(4).compactMap { Double($0) }
         let crop = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])

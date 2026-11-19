@@ -216,6 +216,17 @@ hcmd("frame 160 150 650 760")
 time.sleep(0.3)
 p, w = panel()
 check("panel-follows-host-move-resize", p and near(p["bounds"], expected(w)), f"panel {p and p['bounds']} want {expected(w)}")
+# A live resize the mod sends no edges for (its block keeps its size): the anchored edges carry it, the panel never drops.
+missing, off = 0, 0
+for width in list(range(655, 701, 5)) + list(range(695, 649, -5)):
+    hcmd(f"frame 160 150 {width} 760")
+    for _ in range(3):
+        p, w = panel()
+        missing += p is None
+        off += p is not None and not near(p["bounds"], expected(w))
+time.sleep(0.1)
+p, w = panel()
+check("live-resize-keeps-panel", missing == 0 and p and near(p["bounds"], expected(w)), f"{missing} samples without the panel, {off} a frame behind")
 stale = seq - 1
 c.send({"op": "edges", "tag": "a", "seq": stale, "left": [1, -200], "top": [0, TOP], "right": [1, 0], "bottom": [1, 0], "radius": 16})
 time.sleep(0.3)
@@ -339,9 +350,13 @@ t = time.time()
 gone = until(lambda: panel()[0] is None, 2, 0.01)
 dt = time.time() - t
 check("lease-expiry-hides", gone and 0.3 <= dt <= 1.0, f"hidden after {dt * 1000:.0f} ms (last lease <= 250 ms before)")
-edges()
+time.sleep(1)
 leasing.set()
-check("edges-show-again", until(lambda: panel()[0] is not None, 1))
+check("lease-alone-shows-again-after-1s", until(lambda: panel()[0] is not None, 1))
+leasing.clear()
+time.sleep(6)
+leasing.set()
+check("lease-alone-shows-again-after-6s", until(lambda: panel()[0] is not None, 1))
 c.send({"op": "hide", "tag": "a"})
 t = time.time()
 gone = until(lambda: panel()[0] is None, 1, 0.005)
@@ -352,7 +367,7 @@ hcmd("hide")
 check("host-hidden-hides-panel", until(lambda: panel()[0] is None, 1))
 hcmd("show")
 p, w = until(lambda: (lambda pw: pw if pw[0] else None)(panel()), 1) or (None, where())
-check("host-shown-again", p and near(p["bounds"], expected(w)) and w["above"] == p["id"])
+check("host-shown-again", p and near(p["bounds"], expected(w)) and w["above"] == p["id"], f"{p} {w}")
 leasing.clear()
 c.send({"op": "hide", "tag": "a"})
 
@@ -376,6 +391,29 @@ check("quit-exits", q.returncode == 0)
 until(lambda: idle_exit, max(0, 14 - (time.time() - idle_t0)), 0.1)
 idle_dt = (idle_exit[0] if idle_exit else time.time()) - idle_t0
 check("exits-after-10s-without-client", idle.returncode == 0 and 10 <= idle_dt <= 13, f"{idle_dt:.1f} s")
+
+# The minimize genie: the window's bounds animate. Its first ~200 ms (width grows, origin kept) look like a live
+# resize from the right edge, and the panel follows it; once the origin moves too, the panel must be gone.
+edges()
+leasing.set()
+until(lambda: panel()[0] is not None, 1)
+before = where()["host"]
+hcmd("minimize")
+t0, moved_at, stayed, moving, followed, end = time.time(), None, 0.0, 0, 0.0, time.time() + 1.2
+while time.time() < end:
+    p, w = panel()
+    h = w["host"]
+    if h is not None and h[:2] != before[:2]:
+        moving += 1
+        moved_at = moved_at or time.time()
+        if p is not None:
+            stayed = time.time() - moved_at
+    elif p is not None and h is not None and h != before:
+        followed = time.time() - t0
+# The helper sees the window once a display frame and the hide shows on the next: allow two 60 Hz frames.
+check("minimize-genie-hides-panel", moving >= 10 and stayed <= 0.034 and panel()[0] is None,
+      f"panel stayed {stayed * 1000:.0f} ms after the origin moved ({moving} samples); followed the growing width for {followed * 1000:.0f} ms")
+leasing.clear()
 
 host.stdin.write("quit\n")
 host.stdin.flush()
