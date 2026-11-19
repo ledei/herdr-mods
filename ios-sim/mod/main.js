@@ -32,7 +32,8 @@ const order = (a, b) => booted(b) - booted(a) || a.name.localeCompare(b.name) ||
 const stop = (_e, cx) => cx.stop_propagation();
 const oneLine = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // Terminal control characters (ESC above all) would let app text end the bracketed paste.
-const clean = (s) => s.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, " ");
+// Bidi controls would let it hide or reorder words in the prompt.
+const clean = (s) => s.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ");
 const find = (node, test) => !node || typeof node !== "object" ? null : test(node) ? node : (node.children ?? []).reduce((hit, c) => hit ?? find(c, test), null);
 // simctl's runtime id (prefix dropped), `iOS-26-4`, as `iOS 26.4`, like the fork's runtime_name.
 const runtimeName = (id) => { const i = id.indexOf("-"); return i < 0 ? id : `${id.slice(0, i)} ${id.slice(i + 1).replace(/-/g, ".")}`; };
@@ -104,6 +105,7 @@ export default class IosSim extends View {
     this.lastEdges = "";
     this.shownBefore = false;
     this.rendered = false;
+    this.was = true; // wanted() at the last tick
     this.sock = null;
     this.wq = Promise.resolve();
     this.handle = cx.focus_handle();
@@ -198,6 +200,7 @@ export default class IosSim extends View {
         this.attached = { udid: m.udid, width: m.width, height: m.height };
         this.ended = false;
         this.rotation = "upright";
+        if (this.annotating) this.send({ op: "annotate", on: true }); // the helper's detach turned it off
         break;
       case "rotation": this.rotation = m.value; break;
       case "streamEnded": this.attached = null; this.ended = true; break;
@@ -222,6 +225,13 @@ export default class IosSim extends View {
 
   /** Each tick: renew the lease if this copy drew since the last one (a hidden block doesn't draw). */
   tick(cx) {
+    // A hidden block stops the stream (no frames, no window tracking); shown again, the device list attaches.
+    const w = this.wanted();
+    if (w !== this.was) {
+      this.was = w;
+      if (!w && this.attached) { this.send({ op: "detach" }); this.attached = null; }
+      if (w) this.send({ op: "listDevices" });
+    }
     if (this.visible() && this.rendered) this.send({ op: "lease", tag: this.tag });
     this.rendered = false;
     this.sync();
@@ -230,7 +240,19 @@ export default class IosSim extends View {
 
   /** Whether the helper's window should be over our screen area now. */
   visible() {
-    return Boolean(this.sock && this.live() && !this.picking && this.wanted() && this.screenRect());
+    return Boolean(this.sock && this.live() && !this.picking && this.wanted() && this.screenRect() && !this.tooWide());
+  }
+
+  /** Whether the block runs off the window's right edge: the blocks left of it don't shrink below their px (or min). */
+  tooWide() {
+    const root = layout(), kids = root?.children ?? [];
+    const i = kids.findIndex((n) => n.content?.mod === "ios-sim");
+    let vp;
+    try { vp = globalThis.window.viewport_size(); } catch { return false; }
+    if (i < 0 || !this.root || !this.z) return false;
+    const sep = (root.gap ?? 0) + (root.divider?.width ?? 0);
+    const left = kids.slice(0, i).filter((n) => !n.hidden).reduce((sum, n) => sum + (n.size?.px ?? n.min ?? 0) + sep, 0);
+    return vp.width - this.root.width < left * this.z - 1;
   }
 
   /** The screen area in window points, from the block's and the phone area's measured sizes. */
@@ -255,7 +277,7 @@ export default class IosSim extends View {
     }
     const r = this.screenRect();
     // Right edges follow the window's right edge; the phone is centred, so top and bottom follow its middle.
-    const e = { left: [1, r.x - r.vw], top: [0.5, r.y - r.vh / 2], right: [1, r.x + r.w - r.vw], bottom: [0.5, r.y + r.h - r.vh / 2], radius: r.r };
+    const e = { left: [1, r.x - r.vw], top: [0.5, r.y - r.vh / 2], right: [1, r.x + r.w - r.vw], bottom: [0.5, r.y + r.h - r.vh / 2], radius: r.r, vw: r.vw, vh: r.vh };
     const key = JSON.stringify(e);
     if (key === this.lastEdges) return;
     this.lastEdges = key;
@@ -276,12 +298,13 @@ export default class IosSim extends View {
 
   command(c, cx) {
     if (c === "focus") this.handle.focus();
-    else if (c === "devices") { this.picking = !this.picking; this.confirming = false; this.sync(); }
+    else if (c === "devices") { this.picking = !this.picking; this.confirming = false; this.send({ op: "listDevices" }); this.sync(); }
     else if (c === "home") this.press("home");
     else if (c === "rotate") this.rotate();
     else if (c === "annotate") this.toggleAnnotate();
     else if (c === "add") { const t = this.target(); if (t && this.picks.length) this.paste(t, cx); }
     else if (c === "close") this.hide();
+    else if (c.startsWith("pick-")) { const d = this.devices?.find((x) => x.udid === c.slice(5)); if (d) this.pick(d, cx); }
   }
 
   pick(d, cx) {
@@ -556,6 +579,7 @@ export default class IosSim extends View {
     if (!booted(d)) return { title: `${d.name} is shut down`, body: "Boot it to see and use its screen here.", button: `Boot ${d.name}`, action: (cx) => this.act("Booting", "boot", cx), status: "Shut down" };
     if (this.ended) return { title: "The simulator screen stopped", body: "Try again to reconnect.", button: "Try now", action: () => this.retry(), status: "Not connected", error: true };
     if (!this.live()) return { spinner: true, title: `Connecting to ${d.name}`, body: "The screen shows up here in a moment.", status: "Connecting" };
+    if (this.tooWide()) return { title: "Not enough room", body: "Widen the window or drag the divider to narrow this block.", status: "Too wide" };
     return null;
   }
 

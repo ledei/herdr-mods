@@ -186,7 +186,7 @@
     "px": 420
    },
    "min": 320,
-   "max": 900,
+   "max": 560,
    "content": {
     "mod": "ios-sim"
    }

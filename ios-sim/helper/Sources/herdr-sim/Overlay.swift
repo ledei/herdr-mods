@@ -4,8 +4,9 @@
 //
 // Transport: TCP on 127.0.0.1 (random port), newline-delimited JSON both ways; `<port>\n<token>\n` goes
 // to --port-file (0600). A client's first line must be {"op":"hello","token":T}, else it is closed.
-// mod -> helper: attach {udid} | detach | listDevices | edges {tag, seq, left, top, right, bottom: [a, o], radius}
-//   (edge = host size * a + o points; host = Herdr's window incl. titlebar, top-left origin) | lease {tag}
+// mod -> helper: attach {udid} | detach | listDevices | edges {tag, seq, left, top, right, bottom: [a, o], radius, vw?, vh?}
+//   (edge = host size * a + o points; host = Herdr's window incl. titlebar, top-left origin; vw, vh: the mod's
+//   viewport, to tell Herdr's main window from its others) | lease {tag}
 //   | hide {tag} | key {code, down} | text {text} | button {name, phase?} | rotate {dir: left|right}
 //   | annotate {on} | quit
 // helper -> mod: ping (every 5 s) | devices {devices} | attached {udid, width, height, scale} (portrait
@@ -53,13 +54,19 @@ private func describeWindow(_ id: CGWindowID) -> (on: Bool, frame: CGRect)? {
   return ((d[kCGWindowIsOnscreen as String] as? Bool) == true, cgBounds(d))
 }
 
-/// The pid's largest on-screen normal-level window. window.bounds() inside Herdr is not where it really is.
-private func mainWindow(of pid: pid_t) -> CGWindowID? {
+/// The pid's on-screen normal-level window of the mod's viewport size, else its largest.
+/// window.bounds() inside Herdr is not where it really is.
+private func mainWindow(of pid: pid_t, size: CGSize?) -> CGWindowID? {
   let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
   func area(_ d: [String: Any]) -> CGFloat { let b = cgBounds(d); return b.width * b.height }
-  return list.filter { ($0[kCGWindowOwnerPID as String] as? pid_t) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
-    .max { area($0) < area($1) }
-    .flatMap { $0[kCGWindowNumber as String] as? CGWindowID }
+  let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? pid_t) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+  let fits = size.flatMap { s in mine.first { let b = cgBounds($0); return abs(b.width - s.width) < 2 && abs(b.height - s.height) < 2 } }
+  return (fits ?? mine.max { area($0) < area($1) }).flatMap { $0[kCGWindowNumber as String] as? CGWindowID }
+}
+
+private func sameToken(_ a: String, _ b: String) -> Bool {
+  let x = Array(a.utf8), y = Array(b.utf8)
+  return x.count == y.count && zip(x, y).reduce(0) { $0 | ($1.0 ^ $1.1) } == 0
 }
 
 // MARK: clients
@@ -106,7 +113,7 @@ private func listenTCP(portFile: String, token: String, _ o: Overlay) {
   Thread.detachNewThread {
     while true {
       let c = accept(fd, nil, nil)
-      if c < 0 { continue }
+      if c < 0 { usleep(100_000); continue }  // out of fds, say: don't spin
       var one: Int32 = 1
       setsockopt(c, IPPROTO_TCP, TCP_NODELAY, &one, 4)
       setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &one, 4)
@@ -114,12 +121,16 @@ private func listenTCP(portFile: String, token: String, _ o: Overlay) {
       DispatchQueue.main.async { o.connected(client) }
       Thread.detachNewThread {
         var buf = [UInt8](repeating: 0, count: 65536), pending = Data()
+        // A client gets 2 s to say hello; after that it may stay quiet (a hidden block sends nothing).
+        var wait = timeval(tv_sec: 2, tv_usec: 0)
+        setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
         while pending.count < 1 << 20 {
           let k = read(c, &buf, buf.count)
           if k < 0 && errno == EINTR { continue }
           if k <= 0 { break }
           pending.append(contentsOf: buf[0..<k])
           while let i = pending.firstIndex(of: 10) {
+            if wait.tv_sec != 0 { wait = timeval(); setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size)) }
             let line = String(decoding: pending[pending.startIndex..<i], as: UTF8.self)
             pending = Data(pending[(i + 1)...])
             DispatchQueue.main.async { o.line(client, line) }
@@ -341,6 +352,12 @@ final class OverlayPanel: NSPanel {
 
   private func push(_ t: Touch) { overlay?.hid?.touch(t) }
 
+  /// A hidden panel may never get the mouse-up: lift any finger now, or it stays down on the device.
+  func lift() {
+    if let f = finger { finger = nil; push(.up(f)) }
+    if let p = pad.cancel() { push(.up(p)) }
+  }
+
   override func mouseDown(with e: NSEvent) {
     guard let p = toDevice(loc(e), clamp: false) else { return }
     if annotate { overlay?.pick(p); return }
@@ -459,6 +476,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
   private var resizedAt = -1.0
   private var genie = false  // the window changed size with no corner kept: minimize or restore is playing
   private var lastFind = 0.0
+  private var viewport: CGSize?  // the mod's, from edges
   // the mod's copies
   private struct Copy { var seq = -Double.infinity, edges: [Double]?, live = 0.0, hidden = false }
   private var copies: [String: Copy] = [:]
@@ -525,7 +543,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
     let r = (try? JSONSerialization.jsonObject(with: Data(s.utf8))) as? [String: Any] ?? [:]
     let op = r["op"] as? String ?? ""
     guard c.authed else {
-      if op == "hello" && r["token"] as? String == token { c.authed = true } else { c.close() }
+      if op == "hello", let t = r["token"] as? String, sameToken(t, token) { c.authed = true } else { c.close() }
       return
     }
     func num(_ k: String) -> Double? { (r[k] as? NSNumber)?.doubleValue }
@@ -559,6 +577,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
       copies[tag] = cp
       lastTag = tag
       if let radius = num("radius") { view.layer!.cornerRadius = radius }
+      if let w = num("vw"), let h = num("vh") { viewport = CGSize(width: w, height: h) }
       apply()
     case "lease":
       guard let tag, copies[tag] != nil else { return }
@@ -655,6 +674,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
   }
 
   private func detach() {
+    view.lift()
     stream += 1
     hid?.dev.attachment?.cancel()
     hid = nil
@@ -707,9 +727,11 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
   @objc func tick(_ l: CADisplayLink) {
     let t = now()
     var d = describeWindow(target)
-    if d?.on != true && t - lastFind > 0.5 {  // gone or hidden: Herdr may have another window now
+    // Gone, hidden or not the mod's size: Herdr may have another window now.
+    let wrong = d.map { v in viewport.map { abs($0.width - v.frame.width) >= 2 || abs($0.height - v.frame.height) >= 2 } ?? false } ?? true
+    if (d?.on != true || wrong) && t - lastFind > 0.5 {
       lastFind = t
-      if let w = mainWindow(of: pid), w != target {
+      if let w = mainWindow(of: pid, size: viewport), w != target {
         target = w
         d = describeWindow(w)
         olog("following window \(w)")
@@ -741,7 +763,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
       if x1 - x0 >= 1 && y1 - y0 >= 1 { want = CGRect(x: host.minX + x0, y: host.minY + y0, width: x1 - x0, height: y1 - y0) }
     }
     guard let g = want else {
-      if shown { panel.orderOut(nil); shown = false }
+      if shown { view.lift(); panel.orderOut(nil); shown = false }
       return
     }
     let frame = NSRect(x: g.minX, y: NSScreen.screens[0].frame.height - g.maxY, width: g.width, height: g.height)

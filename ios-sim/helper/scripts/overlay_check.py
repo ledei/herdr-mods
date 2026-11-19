@@ -147,6 +147,10 @@ check("rejects-missing-hello", until(lambda: bad.closed, 2) and not bad.events)
 bad = Conn(hello=False)
 bad.send({"op": "hello", "token": "nope"})
 check("rejects-wrong-token", until(lambda: bad.closed, 2) and not bad.events)
+silent = Conn(hello=False)
+t = time.time()
+check("drops-silent-client-before-hello", until(lambda: silent.closed, 4) and not silent.events, f"after {time.time() - t:.1f} s")
+quiet = Conn()  # says hello, then nothing: must stay connected
 
 c = Conn()
 c.send({"op": "listDevices"})
@@ -186,7 +190,9 @@ threading.Thread(target=lease_loop, daemon=True).start()
 
 
 def edges(tag="a", w=W, s=None):
-    c.send({"op": "edges", "tag": tag, "seq": s or next_seq(), "left": [1, -w], "top": [0, TOP], "right": [1, 0], "bottom": [1, 0], "radius": 16})
+    hw, hh = hcmd(f"where {helper.pid}")["host"][2:]
+    c.send({"op": "edges", "tag": tag, "seq": s or next_seq(), "left": [1, -w], "top": [0, TOP], "right": [1, 0], "bottom": [1, 0], "radius": 16,
+            "vw": hw, "vh": hh})
 
 
 def where():
@@ -357,6 +363,16 @@ leasing.clear()
 time.sleep(6)
 leasing.set()
 check("lease-alone-shows-again-after-6s", until(lambda: panel()[0] is not None, 1))
+# A drag cut off by a hide: the mouse-up never reaches the panel, so the helper lifts the finger itself.
+time.sleep(0.6)
+hits.clear()
+px, py, _ = to_panel(196, 500)
+inject(f"down {px:.2f} {py:.2f}")
+until(lambda: touches("touchstart"), 4)
+c.send({"op": "hide", "tag": "a"})
+check("hide-lifts-finger", until(lambda: touches("touchend"), 3), f"{len(touches('touchstart'))} starts, {len(touches('touchend'))} ends")
+edges()
+until(lambda: panel()[0] is not None, 1)
 c.send({"op": "hide", "tag": "a"})
 t = time.time()
 gone = until(lambda: panel()[0] is None, 1, 0.005)
@@ -373,6 +389,7 @@ c.send({"op": "hide", "tag": "a"})
 
 # MARK: lifetime
 
+check("quiet-client-stays", not quiet.closed)
 pings = [t for t, e in c.events if e.get("ev") == "ping"]
 gaps = [b - a for a, b in zip(pings, pings[1:])]
 check("ping-every-5s", len(pings) >= 2 and all(4.5 <= g <= 5.5 for g in gaps), f"{len(pings)} pings, gaps {[round(g, 2) for g in gaps]}")
