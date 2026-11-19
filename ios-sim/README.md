@@ -28,9 +28,15 @@ From the repository root:
 ./install.sh ios-sim
 ```
 
-This copies the mod to `~/.config/herdr-app/mods/ios-sim`, builds and installs the helper as
-`~/.config/herdr-app/bin/herdr-sim`, and adds the `ios-sim` layout (Herdr's main layout with
-the simulator docked on the right). It never replaces a layout you already have.
+This copies the mod to `<home>/mods/ios-sim`, builds and installs the helper as
+`<home>/bin/herdr-sim`, and adds the `ios-sim` layout (Herdr's main layout with the simulator
+docked on the right). It never replaces a layout you already have. `<home>` is your Herdr home:
+see [Install](../README.md#install) for how `--home` and `$HERDR_APP_HOME` pick it.
+
+`layouts/ios-sim.json` is adapted from Herdr 0.1.16's `defaults/layouts/main.json` (Apache-2.0),
+with the ios-sim block added. It is a snapshot: later changes to Herdr's main layout don't reach
+it. The icons `check.svg`, `chevron.svg` and `close.svg` are Lucide icons (ISC, see
+`mod/LICENSE-Lucide.txt`).
 
 ## Use
 
@@ -41,7 +47,7 @@ the simulator docked on the right). It never replaces a layout you already have.
    simulator with the keyboard.
 
 Close hides the block and stops the helper. To show it again, run `layout.toggle` with id
-`ios-sim` from the command palette, or bind a key in `~/.config/herdr-app/keys.json`:
+`ios-sim` from the command palette, or bind a key in `<home>/keys.json`:
 
 ```json
 "layout:ios-sim": {
@@ -66,7 +72,8 @@ Cmd, Ctrl and Option combinations stay with Herdr.
 
 The mod also takes these commands, for key bindings or `herdr-app do`: `ios-sim.home`,
 `ios-sim.rotate`, `ios-sim.annotate`, `ios-sim.devices` (open or close the device menu),
-`ios-sim.add` (add the picks to the focused agent's prompt) and `ios-sim.close`.
+`ios-sim.add` (add the picks to the focused agent's prompt), `ios-sim.close` and
+`ios-sim.pick-<udid>` (show that simulator, booting it if it is shut down).
 
 ### Annotate
 
@@ -88,13 +95,21 @@ bracketed paste, so the newlines don't send it: edit it, then press Return. The 
 your clipboard (a toast says so). The button only works when the focused pane runs an agent,
 because a plain shell without bracketed paste would run each line.
 
+The text comes partly from the app under test (element labels and ids). Control and
+direction-changing characters are removed, but read it before you press Return: an app can still
+word a label to steer the agent.
+
+Each pick's image is a crop of the simulator screen, kept in
+`~/Library/Caches/herdr-sim/overlay-<pid>-<time>/` (owner-only) so the agent can open it. Nothing
+deletes these; remove the folders when you no longer need them.
+
 ## Limits
 
 - Docked only: the block must stay the last block of the layout's root row, flush with the
   window's right and bottom edges. Floating windows and panes inside tabs aren't supported.
-- If the block is wider than the window has room for (a narrow window, or the block resized
-  past it), it runs off the right edge and the screen shows in the wrong place. Narrow the
-  block or widen the window.
+- If the block is wider than the window has room for (a narrow window), it runs off the right
+  edge. The screen is hidden then and the block says "Not enough room": narrow the block or
+  widen the window.
 - Herdr's menus, dialogs and toasts draw under the simulator screen where they overlap it.
   The mod's own device menu hides the screen while it is open.
 - Switching to Herdr from another app can show the screen a frame late (a brief flash).
@@ -105,3 +120,5 @@ because a plain shell without bracketed paste would run each line.
   helper learns the block is really on screen (a hidden block doesn't draw).
 - Keyboard input needs the block to have the keyboard, which a click on the simulator screen
   doesn't give it (that click goes to the helper's window).
+- `HERDR_SIM_TEST_INPUT` is a test hook: with it set, the helper reads synthetic clicks from that
+  file. Don't set it outside tests.

@@ -8,11 +8,12 @@ Mods for [Herdr](https://github.com/herdrdev/herdr-app) that install into the st
 
 ## Requirements (ios-sim)
 
-- macOS 15 or later.
+- macOS 15 or later (the helper's minimum). Tested on macOS 26.6 with Xcode 27.0 and an iOS 26.4
+  simulator; older versions are untested.
 - Xcode with its iOS simulators (not only the Command Line Tools). The helper is built with Xcode's Swift.
 - Network access for the first build. Swift Package Manager fetches FBSimulatorControl 1.7.8
   (Meta's [idb](https://github.com/facebook/idb) frameworks, from the `facebook/homebrew-fb`
-  package). You don't need Homebrew itself.
+  package, MIT-licensed). You don't need Homebrew itself.
 
 ## Install
 
@@ -26,7 +27,9 @@ cd herdr-mods
 else `~/.config/herdr-app`. It copies the mod into `<home>/mods/<mod>`. For ios-sim it also
 builds the `herdr-sim` helper and installs it in `<home>/bin`, and adds the `ios-sim` layout to
 `<home>/layouts`. A layout you already have is never replaced (the script says what it
-skipped), and nothing is deleted. Run it again after a `git pull` to update.
+skipped), and none of your files are deleted. Run it again after a `git pull` to update: it
+overwrites the installed mod's files, and names each one that differed, so keep your own
+changes to a mod elsewhere.
 
 Then see [ios-sim/README.md](ios-sim/README.md) for how to open and use it.
 
@@ -55,9 +58,11 @@ cd herdr-app
 cargo build --release
 ```
 
-Start that build once, then run `./install.sh ios-sim` from this repository. It sees that your
-Herdr ships its own ios-sim mod, keeps it, and installs only the helper in `<home>/bin/herdr-sim`,
-where Herdr finds it.
+Then run `./install.sh ios-sim` from this repository. If that build has run once, the script sees
+that your Herdr ships its own ios-sim mod, keeps it, and installs only the helper in
+`<home>/bin/herdr-sim`, where Herdr finds it. If it hasn't, the script installs the stock mod
+too; the patched build then installs its own on first start and keeps the stock one as an
+edited copy, which you can delete.
 
 ## License
 
