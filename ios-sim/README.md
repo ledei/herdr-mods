@@ -92,6 +92,9 @@ because a plain shell without bracketed paste would run each line.
 
 - Docked only: the block must stay the last block of the layout's root row, flush with the
   window's right and bottom edges. Floating windows and panes inside tabs aren't supported.
+- If the block is wider than the window has room for (a narrow window, or the block resized
+  past it), it runs off the right edge and the screen shows in the wrong place. Narrow the
+  block or widen the window.
 - Herdr's menus, dialogs and toasts draw under the simulator screen where they overlap it.
   The mod's own device menu hides the screen while it is open.
 - Switching to Herdr from another app can show the screen a frame late (a brief flash).
