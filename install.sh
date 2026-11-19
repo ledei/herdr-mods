@@ -28,9 +28,17 @@ if [ -d "$src/helper" ]; then
   xcrun swift build -c release --package-path "$src/helper" || fail "the helper build failed (see above)."
 fi
 
-mkdir -p "$home/mods/$name"
-cp -R "$src/mod/." "$home/mods/$name/"
-echo "Installed the mod: $home/mods/$name"
+# A Herdr build that ships this mod itself (the patched ios-sim fork) records it in installed.json:
+# replacing it would swap that build's panel for the stock one, so only the helper is installed then.
+shipped=no
+grep -q "\"$name\": *{" "$home/installed.json" 2>/dev/null && shipped=yes
+if [ $shipped = yes ]; then
+  echo "Kept the mod: your Herdr ships its own $name mod (see $home/installed.json)."
+else
+  mkdir -p "$home/mods/$name"
+  cp -R "$src/mod/." "$home/mods/$name/"
+  echo "Installed the mod: $home/mods/$name"
+fi
 
 if [ -d "$src/helper" ]; then
   out="$src/helper/.build/release"
@@ -44,7 +52,7 @@ if [ -d "$src/helper" ]; then
   echo "Installed the helper: $home/bin/herdr-sim"
 fi
 
-if [ -d "$src/layouts" ]; then
+if [ -d "$src/layouts" ] && [ $shipped = no ]; then
   mkdir -p "$home/layouts"
   for f in "$src/layouts"/*.json; do
     [ -e "$f" ] || continue

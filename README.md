@@ -55,8 +55,9 @@ cd herdr-app
 cargo build --release
 ```
 
-Then install the helper with `./install.sh ios-sim` from this repository. Herdr finds it in
-`<home>/bin/herdr-sim`.
+Start that build once, then run `./install.sh ios-sim` from this repository. It sees that your
+Herdr ships its own ios-sim mod, keeps it, and installs only the helper in `<home>/bin/herdr-sim`,
+where Herdr finds it.
 
 ## License
 

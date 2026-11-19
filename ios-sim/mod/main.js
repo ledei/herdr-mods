@@ -34,6 +34,8 @@ const oneLine = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // Terminal control characters (ESC above all) would let app text end the bracketed paste.
 const clean = (s) => s.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, " ");
 const find = (node, test) => !node || typeof node !== "object" ? null : test(node) ? node : (node.children ?? []).reduce((hit, c) => hit ?? find(c, test), null);
+// simctl's runtime id (prefix dropped), `iOS-26-4`, as `iOS 26.4`, like the fork's runtime_name.
+const runtimeName = (id) => { const i = id.indexOf("-"); return i < 0 ? id : `${id.slice(0, i)} ${id.slice(i + 1).replace(/-/g, ".")}`; };
 const utf8 = (bytes) => decodeURIComponent(Array.from(bytes, (b) => "%" + b.toString(16).padStart(2, "0")).join(""));
 const saved = () => { try { return localStorage.getItem("device"); } catch { return null; } };
 const save = (udid) => { try { localStorage.setItem("device", udid); } catch {} };
@@ -185,7 +187,7 @@ export default class IosSim extends View {
   event(m, cx) {
     switch (m.ev) {
       case "devices": {
-        this.devices = (m.devices ?? []).sort(order);
+        this.devices = (m.devices ?? []).map((d) => ({ ...d, runtime: runtimeName(String(d.runtime ?? "")) })).sort(order);
         // Only a lone booted device is chosen for you: other booted ones may be someone else's work.
         const on = this.devices.filter(booted);
         if (!this.device()) this.udid = on.length === 1 ? on[0].udid : null;
@@ -199,7 +201,7 @@ export default class IosSim extends View {
         break;
       case "rotation": this.rotation = m.value; break;
       case "streamEnded": this.attached = null; this.ended = true; break;
-      case "pick": this.addPick(m); break;
+      case "pick": this.actionError = null; this.addPick(m); break; // an earlier pick over nothing left an error
       case "error": this.actionError = m.message; break;
       default: return; // ping: it only keeps the connection open
     }
