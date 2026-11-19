@@ -213,7 +213,7 @@ export default class IosSim extends View {
 
   attach() {
     const d = this.device();
-    if (!d || !booted(d) || this.busy || this.attached?.udid === d.udid) return;
+    if (!d || !booted(d) || this.busy || !this.wanted() || this.attached?.udid === d.udid) return;
     this.ended = false;
     this.send({ op: "attach", udid: d.udid });
   }
@@ -225,16 +225,17 @@ export default class IosSim extends View {
 
   /** Each tick: renew the lease if this copy drew since the last one (a hidden block doesn't draw). */
   tick(cx) {
-    // A hidden block stops the stream (no frames, no window tracking); shown again, the device list attaches.
-    const w = this.wanted();
-    if (w !== this.was) {
-      this.was = w;
-      if (!w && this.attached) { this.send({ op: "detach" }); this.attached = null; }
-      if (w) this.send({ op: "listDevices" });
-    }
     if (this.visible() && this.rendered) this.send({ op: "lease", tag: this.tag });
     this.rendered = false;
     this.sync();
+    // A hidden block stops the stream (no frames, no window tracking); shown again, the device list attaches.
+    // After sync: its hide goes first, as the helper's detach takes a while.
+    const w = this.wanted();
+    if (w !== this.was) {
+      this.was = w;
+      if (!w) { this.send({ op: "detach" }); this.attached = null; } // also stops an attach still on its way
+      if (w) this.send({ op: "listDevices" });
+    }
     if (this.visible()) cx.notify(); // draws again only if shown: that is what the next lease checks
   }
 
@@ -304,7 +305,7 @@ export default class IosSim extends View {
     else if (c === "annotate") this.toggleAnnotate();
     else if (c === "add") { const t = this.target(); if (t && this.picks.length) this.paste(t, cx); }
     else if (c === "close") this.hide();
-    else if (c.startsWith("pick-")) { const d = this.devices?.find((x) => x.udid === c.slice(5)); if (d) this.pick(d, cx); }
+    else if (c.startsWith("pick-") && !this.busy) { const d = this.devices?.find((x) => x.udid === c.slice(5)); if (d) this.pick(d, cx); }
   }
 
   pick(d, cx) {
