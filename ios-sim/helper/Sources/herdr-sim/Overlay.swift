@@ -26,6 +26,8 @@ import QuartzCore
 
 private func olog(_ s: String) { FileHandle.standardError.write(Data("herdr-sim overlay: \(s)\n".utf8)) }
 private func now() -> Double { CACurrentMediaTime() }
+// With the test hook on, input and frame timings go to stderr for latency and fps checks.
+private let testing = ProcessInfo.processInfo.environment["HERDR_SIM_TEST_INPUT"] != nil
 
 private let rotations = ["upright", "clockwise", "upsideDown", "counterclockwise"]
 /// Index = clockwise quarter turns, matching `rotations` (rotate right goes clockwise, like Simulator.app's Cmd-Right).
@@ -176,6 +178,7 @@ enum Touch: Equatable { case down(CGPoint), move(CGPoint), up(CGPoint) }
         if case .work(_, true, _) = job {} else { onError((error as? Fail)?.msg ?? "\(error)") }
       }
       if case .work(_, _, let then?) = job { then() }
+      if testing, case .touch(let t) = job { olog(String(format: "test hid %@ done %.4f", "\(t)", now())) }
       busy = false
       if failed { jobs.removeAll { if case .touch(.move) = $0 { return true } else { return false } } }
       pump()
@@ -448,6 +451,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
   private var clients: [ObjectIdentifier: Client] = [:]
   private var lastClient = now()
   private var link: CADisplayLink?
+  private var frames = 0, framesAt = 0.0
   // Herdr's window
   private var target: CGWindowID = 0
   private var host = CGRect.null
@@ -619,6 +623,10 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
           case .frameRendered:
             DispatchQueue.main.async {
               guard let self, self.stream == mine else { return }
+              if testing {
+                self.frames += 1
+                if now() - self.framesAt >= 1 { olog(String(format: "test fps %d", self.frames)); self.frames = 0; self.framesAt = now() }
+              }
               CATransaction.begin()
               CATransaction.setDisableActions(true)
               self.view.screen.perform(Selector(("setContentsChanged")))
@@ -748,6 +756,7 @@ private func frameOf(_ el: [String: Any]) -> CGRect? {
 
   func inject(_ line: String) {
     let p = line.split(separator: " ").map(String.init)
+    olog(String(format: "test in %@ %.4f", line, now()))
     guard p.count >= 3, let x = Double(p[1]), let y = Double(p[2]) else { return olog("test input: bad line '\(line)'") }
     let wp = NSPoint(x: x, y: view.bounds.height - y)
     let types: [String: NSEvent.EventType] = ["down": .leftMouseDown, "drag": .leftMouseDragged, "up": .leftMouseUp, "move": .mouseMoved]
