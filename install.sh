@@ -46,6 +46,21 @@ else
   echo "Installed the mod: $home/mods/$name"
 fi
 
+# Extra mods that ship with this one (the browser's sign-in dialog and its tab bar): each goes in <home>/mods/<id>.
+if [ -d "$src/mods" ] && [ $shipped = no ]; then
+  for m in "$src/mods"/*/; do
+    id=$(basename "$m")
+    mkdir -p "$home/mods/$id"
+    cp -R "$m." "$home/mods/$id/"
+    echo "Installed the mod: $home/mods/$id"
+  done
+fi
+
+# Helpers built by the mod's own script (no Swift package): ./install.sh browser
+if [ -x "$src/install-helpers.sh" ]; then
+  "$src/install-helpers.sh" "$home" || fail "the $name helpers failed to install (see above)."
+fi
+
 if [ -d "$src/helper" ]; then
   out="$src/helper/.build/release"
   mkdir -p "$home/bin"

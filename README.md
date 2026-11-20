@@ -5,6 +5,7 @@ Mods for [Herdr](https://github.com/herdrdev/herdr-app) that install into the st
 | Mod | What it does |
 |---|---|
 | [ios-sim](ios-sim/README.md) | A live iOS Simulator docked on the right of the Herdr window, with touch, keys, hardware buttons, rotation and an annotate mode that turns picked screen elements into a prompt for your coding agent. |
+| [browser](browser/README.md) | A browser panel with a real native WebKit view (or a headless-Chrome stream) docked in the Herdr window: tabs, element select that copies XML for your coding agent, and Chrome sign-in import. |
 
 ## Requirements (ios-sim)
 
