@@ -2194,7 +2194,7 @@ impl Engine {
             "new" => {
                 if let Some(u) = args["url"].as_str() {
                     if !crate::proto::agent_url_ok(&normalize_url(u)) {
-                        return Err("agents may open http, https, about: and data: pages only".into());
+                        return Err("agents may open http, https, about:blank and data: pages only".into());
                     }
                 }
                 self.tab_new(gi, args["url"].as_str().map(String::from)).await?;

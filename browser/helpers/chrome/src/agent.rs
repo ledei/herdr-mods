@@ -619,7 +619,7 @@ pub async fn run(ctx: Ctx, op: &str, args: Value) -> Result<Value, String> {
                 (Some(u), _) => {
                     let url = normalize_url(u);
                     if !agent_url_ok(&url) {
-                        return Err("agents may open http, https, about: and data: pages only".into());
+                        return Err("agents may open http, https, about:blank and data: pages only".into());
                     }
                     let blank = url == "about:blank";
                     ctx.send(InputOp::Navigate(url))?;

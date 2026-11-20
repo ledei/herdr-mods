@@ -266,7 +266,7 @@ pub fn normalize_url(input: &str) -> String {
 /// a page that talks the agent into it read local files or Chrome's internal pages.
 pub fn agent_url_ok(url: &str) -> bool {
     let lower = url.trim().to_ascii_lowercase();
-    ["http://", "https://", "about:", "data:"].iter().any(|p| lower.starts_with(p))
+    lower == "about:blank" || ["http://", "https://", "data:"].iter().any(|p| lower.starts_with(p))
 }
 
 pub fn pct_encode(s: &str) -> String {
@@ -363,10 +363,10 @@ mod tests {
 
     #[test]
     fn agents_open_only_web_pages() {
-        for ok in ["https://a.com", "HTTP://a.com", "about:blank", "data:text/html,hi"] {
+        for ok in ["https://a.com", "HTTP://a.com", "about:blank", " ABOUT:BLANK ", "data:text/html,hi"] {
             assert!(agent_url_ok(ok), "{ok}");
         }
-        for bad in ["file:///etc/passwd", "chrome://settings", "view-source:https://a.com", "devtools://x", "javascript:alert(1)", "chrome-extension://x"] {
+        for bad in ["file:///etc/passwd", "chrome://settings", "view-source:https://a.com", "devtools://x", "javascript:alert(1)", "chrome-extension://x", "about:srcdoc", "about:version", "about:blank#x"] {
             assert!(!agent_url_ok(&normalize_url(bad)) || !agent_url_ok(bad), "{bad}");
             assert!(!agent_url_ok(bad), "{bad}");
         }
