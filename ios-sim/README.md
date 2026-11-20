@@ -31,7 +31,7 @@ From the repository root:
 This copies the mod to `<home>/mods/ios-sim`, builds and installs the helper as
 `<home>/bin/herdr-sim`, and adds the `ios-sim` layout (Herdr's main layout with the simulator
 docked on the right). It never replaces a layout you already have. `<home>` is your Herdr home:
-see [Install](../README.md#install) for how `--home` and `$HERDR_APP_HOME` pick it.
+see [Install](../README.md#install-by-hand) for how `--home` and `$HERDR_APP_HOME` pick it.
 
 `layouts/ios-sim.json` is adapted from Herdr 0.1.16's `defaults/layouts/main.json` (Apache-2.0),
 with the ios-sim block added. It is a snapshot: later changes to Herdr's main layout don't reach
