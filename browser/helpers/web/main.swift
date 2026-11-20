@@ -119,9 +119,15 @@ let pickScript = #"""
 })
 """#
 
+// The picker runs in its own content world: page scripts share the DOM but cannot see or call its message handler,
+// so only the panel's Select can put anything on the clipboard.
+let pickWorld = WKContentWorld.world(name: "herdr-pick")
+var pickActive = false
+
 final class PickHandler: NSObject, WKScriptMessageHandler {
   func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
-    guard let m = message.body as? [String: Any] else { return }
+    guard pickActive, message.frameInfo.isMainFrame, message.webView === current?.web, let m = message.body as? [String: Any] else { return }
+    pickActive = false
     if m["cancel"] != nil { send(["ev": "picked", "cancel": true]); return }
     guard var xml = m["xml"] as? String, let web = current?.web else { return }
     let summary = m["summary"] as? String ?? "Element"
@@ -150,7 +156,7 @@ let config: WKWebViewConfiguration = {
   let c = WKWebViewConfiguration()
   c.websiteDataStore = .default() // sign-ins persist between runs
   c.preferences.isElementFullscreenEnabled = true
-  c.userContentController.add(pickHandler, name: "herdrPick")
+  c.userContentController.add(pickHandler, contentWorld: pickWorld, name: "herdrPick")
   return c
 }()
 var tabs: [String: Tab] = [:]
@@ -298,7 +304,10 @@ func handle(_ m: [String: Any]) {
   case "back": (tabs[id] ?? current)?.web.goBack()
   case "forward": (tabs[id] ?? current)?.web.goForward()
   case "reload": (tabs[id] ?? current)?.web.reload()
-  case "pick": (tabs[id] ?? current)?.web.evaluateJavaScript("(\(pickScript))(\((m["on"] as? Bool) == true ? "true" : "false"))", completionHandler: nil)
+  case "pick":
+    let on = (m["on"] as? Bool) == true
+    pickActive = on
+    (tabs[id] ?? current)?.web.evaluateJavaScript("(\(pickScript))(\(on ? "true" : "false"))", in: nil, in: pickWorld, completionHandler: { _ in })
   case "cookies":
     var imported = 0, skipped = 0
     let group = DispatchGroup()

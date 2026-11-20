@@ -2192,6 +2192,11 @@ impl Engine {
         match args["action"].as_str().unwrap_or("list") {
             "list" => {}
             "new" => {
+                if let Some(u) = args["url"].as_str() {
+                    if !crate::proto::agent_url_ok(&normalize_url(u)) {
+                        return Err("agents may open http, https, about: and data: pages only".into());
+                    }
+                }
                 self.tab_new(gi, args["url"].as_str().map(String::from)).await?;
             }
             "close" => {

@@ -10,11 +10,14 @@ mkdir -p "$home/bin"
 
 xcrun --find swiftc >/dev/null 2>&1 || { echo "install-helpers: swiftc not found. Install Xcode or the Command Line Tools (xcode-select --install)." >&2; exit 1; }
 echo "Building herdr-web (the native view)..."
-if ! swiftc -O -o "$home/bin/.herdr-web.new" "$here/helpers/web/main.swift" -framework AppKit -framework WebKit -framework Network >/tmp/herdr-web-build.log 2>&1; then
-  cat /tmp/herdr-web-build.log >&2
-  echo "install-helpers: the herdr-web build failed." >&2
+log=$(mktemp)
+if ! swiftc -O -o "$home/bin/.herdr-web.new" "$here/helpers/web/main.swift" -framework AppKit -framework WebKit -framework Network >"$log" 2>&1; then
+  cat "$log" >&2
+  rm -f "$log"
+  echo "install-helpers: the herdr-web build failed (the compiler output is above)." >&2
   exit 1
 fi
+rm -f "$log"
 mv -f "$home/bin/.herdr-web.new" "$home/bin/herdr-web"
 echo "Installed the native view helper: $home/bin/herdr-web"
 
@@ -25,5 +28,5 @@ if command -v cargo >/dev/null 2>&1; then
   mv -f "$home/bin/.herdr-browser.new" "$home/bin/herdr-browser"
   echo "Installed the Chrome helper: $home/bin/herdr-browser"
 else
-  echo "Skipped herdr-browser: cargo (Rust) not found. Native mode works without it; Stream mode, agent tools and the Sign-ins import need it."
+  echo "Skipped herdr-browser: cargo (Rust) is not installed. The native browser works without it. Stream mode, the agent tools and Sign-ins need it: install Rust from https://rustup.rs, then run ./install.sh browser again."
 fi

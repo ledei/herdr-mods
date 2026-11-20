@@ -95,4 +95,4 @@ if [ -d "$src/layouts" ] && [ $shipped = no ]; then
   done
 fi
 
-echo "Done. See $name/README.md for how to use it."
+echo "Done. Restart Herdr (or reload its mods), then see $name/README.md for how to open and use it."

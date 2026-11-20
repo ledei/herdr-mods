@@ -262,6 +262,13 @@ pub fn normalize_url(input: &str) -> String {
     format!("https://www.google.com/search?q={}", pct_encode(s))
 }
 
+/// Pages an AI agent may open: the web, about: and data:. Not file:, chrome:, view-source: or devtools:, which would let
+/// a page that talks the agent into it read local files or Chrome's internal pages.
+pub fn agent_url_ok(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    ["http://", "https://", "about:", "data:"].iter().any(|p| lower.starts_with(p))
+}
+
 pub fn pct_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {
@@ -352,6 +359,17 @@ mod tests {
         assert!(parse_client(r#"{"t":"nope"}"#).is_err());
         assert!(parse_client(r#"{"t":"navigate"}"#).is_err());
         assert!(parse_client(r#"{"t":"mouse","type":"hover"}"#).is_err());
+    }
+
+    #[test]
+    fn agents_open_only_web_pages() {
+        for ok in ["https://a.com", "HTTP://a.com", "about:blank", "data:text/html,hi"] {
+            assert!(agent_url_ok(ok), "{ok}");
+        }
+        for bad in ["file:///etc/passwd", "chrome://settings", "view-source:https://a.com", "devtools://x", "javascript:alert(1)", "chrome-extension://x"] {
+            assert!(!agent_url_ok(&normalize_url(bad)) || !agent_url_ok(bad), "{bad}");
+            assert!(!agent_url_ok(bad), "{bad}");
+        }
     }
 
     #[test]
