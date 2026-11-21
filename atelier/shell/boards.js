@@ -18,11 +18,16 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
  *  | 'play' (its strip's Play pill). */
 // Each board frame gets its own origin, <key>.localhost on the boards port (it resolves to loopback), so one board's
 // script cannot reach into another's frame and post as it. key: the board's file, plus the version for a variant.
+// atelierd serves a board's document only on the origin made for it (server/atelierd.mjs boardLabel, the same hash).
 export function boardUrl(boardsUrl, file, key = file) {
   const u = new URL(boardsUrl);
-  let h = 0x811c9dc5;
-  for (const ch of `${u.pathname}|${key}`) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
-  return `${u.protocol}//b${h.toString(36)}.localhost:${u.port}${u.pathname}${encodeURIComponent(file)}`;
+  return `${u.protocol}//b${boardLabel(u.pathname, key)}.localhost:${u.port}${u.pathname}${encodeURIComponent(file)}`;
+}
+/** FNV-1a 64 of "<canvas path>|<key>", base 36: the label of a board's origin. */
+export function boardLabel(pathname, key) {
+  let h = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(`${pathname}|${key}`)) h = ((h ^ BigInt(byte)) * 0x100000001b3n) & 0xffffffffffffffffn;
+  return h.toString(36);
 }
 
 export function createBoards({ layer, canvas, boardsUrl, camera, onChange }) {
