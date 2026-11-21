@@ -18,7 +18,7 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
  *  | 'play' (its strip's Play pill). */
 // Each board frame gets its own origin, <key>.localhost on the boards port (it resolves to loopback), so one board's
 // script cannot reach into another's frame and post as it. key: the board's file, plus the version for a variant.
-// atelierd serves a board's document only on the origin made for it (server/atelierd.mjs boardLabel, the same hash).
+// atelierd serves a board's document only on the origin made for it (server/boards.mjs boardLabel, the same hash).
 export function boardUrl(boardsUrl, file, key = file) {
   const u = new URL(boardsUrl);
   return `${u.protocol}//b${boardLabel(u.pathname, key)}.localhost:${u.port}${u.pathname}${encodeURIComponent(file)}`;

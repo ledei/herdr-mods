@@ -42,28 +42,7 @@ const hostOk = (req, port) => req.headers.host === `127.0.0.1:${port}` || req.he
 // The boards listener also answers b<label>.localhost: each board frame has its own origin (shell/boards.js boardUrl).
 const labelOf = (req, port) => new RegExp(`^b([0-9a-z]{1,13})\\.localhost:${port}$`).exec(req.headers.host ?? '')?.[1] ?? null;
 const boardHostOk = (req, port) => hostOk(req, port) || labelOf(req, port) !== null;
-/** FNV-1a 64 of "<canvas path>|<key>", base 36, as shell/boards.js boardLabel (a test keeps the two equal). */
-export function boardLabel(pathname, key) {
-  let h = 0xcbf29ce484222325n;
-  for (const byte of Buffer.from(`${pathname}|${key}`)) h = ((h ^ BigInt(byte)) * 0x100000001b3n) & 0xffffffffffffffffn;
-  return h.toString(36);
-}
-// A board origin serves only the board document its label was made for: another page there is sent to its own origin,
-// and anything else (scripts, images, SVG) comes with CSP sandbox, so opened as a document it gets an opaque origin.
-// Without this one board could load its own page on a sibling's origin and script the sibling's frame.
-function boardOrigin(req, res, port) {
-  const label = labelOf(req, port);
-  if (label === null) return true;
-  let u, rel;
-  try { u = new URL(req.url, 'http://x'); rel = decodeURIComponent(u.pathname); } catch { send(res, 400, 'Bad request'); return false; }
-  const m = /^\/c\/([0-9a-f]{12})\/(.+\.x?html?)$/i.exec(rel);
-  if (!m) { res.setHeader('content-security-policy', 'sandbox'); return true; }
-  const v = u.searchParams.get('v'), want = boardLabel(`/c/${m[1]}/`, v ? `${m[2]}?v=${v}` : m[2]);
-  if (want === label) return true;
-  res.writeHead(302, { location: `http://b${want}.localhost:${port}${req.url}`, 'cache-control': 'no-store' });
-  res.end();
-  return false;
-}
+export { boardLabel } from './boards.mjs';
 
 /** Starts both listeners. opts: {home, runtime, dsDirs, shellDir, quiet}. Resolves {ui, boards, token, registry, close}. */
 export async function start(opts = {}) {
@@ -104,7 +83,7 @@ export async function start(opts = {}) {
   cfg.ui = `http://127.0.0.1:${ui}`; // boards.mjs: the bridge's data-ui and the boards' frame-ancestors
   const boardsServer = await listen((req, res) => {
     if (!boardHostOk(req, boards)) return send(res, 403, 'Forbidden host');
-    if (boardOrigin(req, res, boards)) serveBoards(req, res, { registry, cfg });
+    serveBoards(req, res, { registry, cfg, label: labelOf(req, boards), port: boards });
   }, ui + 1);
   boards = boardsServer.address().port;
   origins.ui = `http://127.0.0.1:${ui}`;
