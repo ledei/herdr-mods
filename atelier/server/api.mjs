@@ -15,6 +15,7 @@ import { createPlay } from './play.mjs';
 import { mountComments } from './comments.mjs';
 import { mountGroups } from './groups.mjs';
 import { mountEdit } from './edit.mjs';
+import { writeScope } from './scope.mjs';
 import { mountProps } from './props.mjs';
 import { mountRecord } from './record.mjs';
 import { mountMarkup } from './markup.mjs';
@@ -185,7 +186,8 @@ export function createApi({ registry, token, origins }) {
       '/__agent/resolve': () => side.resolveComment(c, b),
       '/__agent/write': () => {
         if (typeof b.content !== 'string') fail(400, 'content must be a string');
-        return { file: b.file, sha: side.writeBoard(c, b.file, b.content, b.expectSha) };
+        const outOfScope = writeScope(c, b.file, b.content, b.outOfScope); // held to the locked scope like /__agent/edit
+        return { file: b.file, sha: side.writeBoard(c, b.file, b.content, b.expectSha), ...(outOfScope ? { outOfScope } : {}) };
       },
       '/__agent/restore': () => side.restore(c, b),
       '/__agent/checkpoint': () => side.checkpoint(c, b),

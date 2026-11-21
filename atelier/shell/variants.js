@@ -5,6 +5,7 @@
 // compare, kopia), from a toolbar button; under 600 px it folds into a drawer at the bottom.
 import * as api from './api.js';
 import { own } from './scope.js';
+import { boardUrl } from './boards.js';
 
 const ICO = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const COPY = ICO('<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>');
@@ -32,7 +33,6 @@ const at = (x, y, dx = 0, dy = 0) => `left:calc(${x}px + ${dx}px / var(--s));top
 /** ctx: layer, canvas (id), boardsUrl, boards, camera, page() (the page shown), showPage(page, focusFile),
  *  selected() (the one selected board's file, or null), select(file), tell(message) (to the herdr panel). */
 export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage, selected, select, tell }) {
-  const origin = new URL(boardsUrl).origin;
   let groups = [], compare = null, panelFor;
   const frames = new Map(); // key → {node, frame, props?} for prop variants and the compare board
   const marks = el('div', 'vmarks');
@@ -117,7 +117,7 @@ export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage,
   let changed = false;
   function vboard(key, file, box, { props, v, title, want = false }) {
     let it = frames.get(key);
-    const src = `${boardsUrl}${encodeURIComponent(file)}${v ? `?v=${encodeURIComponent(v)}` : ''}`;
+    const src = `${boardUrl(boardsUrl, file, v ? `${file}?v=${v}` : file)}${v ? `?v=${encodeURIComponent(v)}` : ''}`;
     if (!it || !it.node.isConnected || it.src !== src || JSON.stringify(it.props) !== JSON.stringify(props)) {
       it?.node.remove();
       const node = el('div', 'vboard');
@@ -126,7 +126,7 @@ export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage,
       bar.style.cssText = at(0, 0, 12, 12);
       bar.append(button('ghost small', 'Show live', () => { it.want = true; boards.budget(); }));
       node.append(bar);
-      it = { node, bar, frame: null, props, src, title, want, on: false, live: (on) => frameOn(it, on) };
+      it = { node, bar, frame: null, props, src, file, origin: new URL(src).origin, title, want, on: false, live: (on) => frameOn(it, on) };
       frames.set(key, it);
       layer.append(node);
       boards.extra(key, it);
@@ -179,9 +179,9 @@ export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage,
   // ---------- the bridge of our frames: booted → props {set} (T11's op); no answer in PROPS_MS: the board shows its defaults ----------
   const waiting = new Map();
   addEventListener('message', (e) => {
-    if (e.origin !== origin || !e.data || typeof e.data !== 'object') return;
+    if (!e.data || typeof e.data !== 'object') return;
     const it = [...frames.values()].find((x) => x.frame && x.frame.contentWindow === e.source);
-    if (!it) return;
+    if (!it || e.origin !== it.origin) return;
     const m = e.data;
     if (m.__atelier === 'res') { waiting.get(m.id)?.(m); waiting.delete(m.id); return; }
     if (m.__atelier === 'event' && m.type === '__dc_booted' && it.props) sendProps(it);
@@ -191,7 +191,7 @@ export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage,
     it.node.dataset.props = 'sent';
     const t = setTimeout(() => { waiting.delete(id); if (it.frame) it.node.dataset.props = 'failed'; it.node.title = 'These Tweaks did not reach the board: it shows its defaults.'; }, PROPS_MS);
     waiting.set(id, (m) => { clearTimeout(t); if (!it.frame) return; it.node.dataset.props = m.error === undefined ? 'ok' : 'failed'; if (m.error !== undefined) it.node.title = String(m.error); });
-    it.frame.contentWindow.postMessage({ __atelier: 'req', id, op: 'props', args: { set: it.props } }, origin);
+    it.frame.contentWindow.postMessage({ __atelier: 'req', id, op: 'props', args: { set: it.props } }, it.origin);
   }
 
   // ---------- the Versions panel ----------
@@ -288,7 +288,7 @@ export function init({ layer, canvas, boardsUrl, boards, camera, page, showPage,
       }, () => {});
     }
     if (ev.type === 'file' && ev.file?.endsWith('.dc.html')) { // a prop variant reloads with the new file
-      for (const it of frames.values()) if (it.frame && it.props && it.src === boardsUrl + encodeURIComponent(ev.file)) it.frame.src = it.src;
+      for (const it of frames.values()) if (it.frame && it.props && it.src === boardUrl(boardsUrl, ev.file)) it.frame.src = it.src;
       if (!panel.hidden && ev.file === panelFor) renderPanel();
     }
   }

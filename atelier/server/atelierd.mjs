@@ -39,6 +39,8 @@ async function running(portFile) {
 
 // Host must name this listener on loopback (stops DNS rebinding).
 const hostOk = (req, port) => req.headers.host === `127.0.0.1:${port}` || req.headers.host === `localhost:${port}`;
+// The boards listener also answers <key>.localhost: each board frame has its own origin (shell/boards.js boardUrl).
+const boardHostOk = (req, port) => hostOk(req, port) || new RegExp(`^b[0-9a-z]{1,13}\\.localhost:${port}$`).test(req.headers.host ?? '');
 
 /** Starts both listeners. opts: {home, runtime, dsDirs, shellDir, quiet}. Resolves {ui, boards, token, registry, close}. */
 export async function start(opts = {}) {
@@ -78,7 +80,7 @@ export async function start(opts = {}) {
   ui = uiServer.address().port;
   cfg.ui = `http://127.0.0.1:${ui}`; // boards.mjs: the bridge's data-ui and the boards' frame-ancestors
   const boardsServer = await listen((req, res) => {
-    if (!hostOk(req, boards)) return send(res, 403, 'Forbidden host');
+    if (!boardHostOk(req, boards)) return send(res, 403, 'Forbidden host');
     serveBoards(req, res, { registry, cfg });
   }, ui + 1);
   boards = boardsServer.address().port;

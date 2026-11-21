@@ -210,6 +210,22 @@ export function checkScope(c, file, target = {}, opts = {}) {
   return { ok: outside.length === 0, outside, scope };
 }
 
+/** An agent's whole-board write (/__agent/write) under the locked scope, as /__agent/edit: null when nothing is locked
+ *  or the change lies inside it; outside it, a 403 unless outOfScope gives a reason, then {reason, outside}. */
+export function writeScope(c, file, content, outOfScope) {
+  const scope = readScope(c.dir);
+  if (!scope || typeof scope !== 'object') return null;
+  if (typeof file !== 'string' || !FILE_RE.test(file)) throw Object.assign(new Error('bad file name'), { status: 400 });
+  let before; try { before = fs.readFileSync(path.join(c.dir, file)); } catch { return null; } // a new board: nothing was there to keep
+  const r = changed(before, Buffer.from(content));
+  if (!r) return null;
+  const res = checkScope(c, file, { ranges: [r] }, { scope, src: before });
+  if (res.ok) return null;
+  const why = typeof outOfScope === 'string' ? outOfScope.trim().slice(0, 300) : '';
+  if (!why) throw Object.assign(new Error(`Refused: outside the locked part (${scope.label || scope.kind}). Ask the user, or pass outOfScope with a reason.`), { status: 403, extra: { outside: res.outside } });
+  return { reason: why, outside: res.outside };
+}
+
 const readScope = (dir) => { try { return JSON.parse(fs.readFileSync(path.join(dir, '.atelier', 'view-state.json'), 'utf8')).scope ?? null; } catch { return null; } };
 
 /** After a raw write of the board at file path p (an agent's Write or Edit): was it outside the locked scope?

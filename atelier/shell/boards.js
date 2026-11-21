@@ -1,6 +1,6 @@
 // The boards of one canvas: their elements on the layer, snapshots (<img> from /__atelier/thumb), the live budget
-// (at most LIVE iframes, agents' boards included) and the bridge in each live frame. Frames come from the boards
-// origin; messages go to that origin only, and only messages from it (and from one of our frames) are heard.
+// (at most LIVE iframes, agents' boards included) and the bridge in each live frame. Each frame has its own origin on
+// the boards port (boardUrl); messages go to that frame's origin only, and only messages from it are heard.
 // A frame never moves in the DOM: moving an iframe reloads it (WebKit has no moveBefore). So a board an agent uses off
 // this page keeps its element on the layer, hidden (.off) at the view's corner, and shows in place when its page opens.
 import * as api from './api.js';
@@ -16,8 +16,16 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 
 /** layer: the transformed layer; onChange(kind, board): 'live' | 'errors' | 'swapped' | 'painted' | 'esc' (pressed in a board)
  *  | 'play' (its strip's Play pill). */
+// Each board frame gets its own origin, <key>.localhost on the boards port (it resolves to loopback), so one board's
+// script cannot reach into another's frame and post as it. key: the board's file, plus the version for a variant.
+export function boardUrl(boardsUrl, file, key = file) {
+  const u = new URL(boardsUrl);
+  let h = 0x811c9dc5;
+  for (const ch of `${u.pathname}|${key}`) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
+  return `${u.protocol}//b${h.toString(36)}.localhost:${u.port}${u.pathname}${encodeURIComponent(file)}`;
+}
+
 export function createBoards({ layer, canvas, boardsUrl, camera, onChange }) {
-  const origin = new URL(boardsUrl).origin;
   const all = new Map(); // file → board
   let page = null, shown = [], loading = 0, reloads = 0, zoom = 1;
   const loadQ = [], waiting = new Map();
@@ -204,7 +212,8 @@ export function createBoards({ layer, canvas, boardsUrl, camera, onChange }) {
     for (const b of all.values()) if (b.frame && b.page !== page) place(b); // follow the view
     pump();
   }
-  const srcOf = (b) => `${boardsUrl}${encodeURIComponent(b.file)}${reloads ? `?r=${reloads}` : ''}`;
+  const srcOf = (b) => `${boardUrl(boardsUrl, b.file)}${reloads ? `?r=${reloads}` : ''}`;
+  const originOf = (b) => new URL(boardUrl(boardsUrl, b.file)).origin;
   function live(b) {
     if (b.frame) return;
     if (!b.el) build(b);
@@ -264,9 +273,9 @@ export function createBoards({ layer, canvas, boardsUrl, camera, onChange }) {
   // ---------- the bridge ----------
   const byWindow = (w) => { for (const b of all.values()) if (b.frame?.contentWindow === w) return b; return null; };
   addEventListener('message', (e) => {
-    if (e.origin !== origin || !e.data || typeof e.data !== 'object') return;
+    if (!e.data || typeof e.data !== 'object') return;
     const b = byWindow(e.source), m = e.data;
-    if (!b) return;
+    if (!b || e.origin !== originOf(b)) return;
     if (m.__atelier === 'res') { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); w.done(m); } return; }
     if (m.__atelier === 'esc') return onChange('esc', b);
     if (m.__atelier !== 'event') return;
@@ -313,7 +322,7 @@ export function createBoards({ layer, canvas, boardsUrl, camera, onChange }) {
       b.loaded.then(() => {
         if (!waiting.has(id) || b.frame !== f) return;
         t = setTimeout(() => { waiting.delete(id); no(new Error('the board did not answer')); }, ms);
-        f.contentWindow.postMessage({ __atelier: 'req', id, op, args }, origin);
+        f.contentWindow.postMessage({ __atelier: 'req', id, op, args }, originOf(b));
       });
     });
   }
