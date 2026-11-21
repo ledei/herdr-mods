@@ -1,0 +1,57 @@
+/* The Tweaks panel (shell/tweaks.js). Look and tokens: V2Play's Tweaks side panel; narrow: V2States (a drawer). */
+:root { --tw-bg: #1a1b1e; --tw-line: #26282c; --tw-well: #26272b; --tw-well-line: #303237; --tw-on: #3a3c41; }
+
+.tweaks { position: fixed; right: 0; top: var(--top); bottom: 0; width: 260px; display: flex; flex-direction: column; background: var(--tw-bg); border-left: 1px solid var(--line); font-size: 12px; overflow: hidden; z-index: 6; user-select: none; -webkit-user-select: none; }
+.tweaks[hidden] { display: none; }
+.tweaks .sh { height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--tw-line); background: transparent; color: var(--text); font: 600 12px var(--font); text-align: left; cursor: default; }
+.tweaks .sh .ico { width: 14px; height: 14px; }
+.tweaks .sh .board { margin-left: auto; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tweaks .tbody { flex: 1; overflow: auto; }
+.tweaks .tgroup { padding: 8px 0; border-bottom: 1px solid var(--tw-line); }
+.tweaks .kv { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; padding: 0 12px; color: var(--muted-2); }
+.tweaks .kv > .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: none; max-width: 45%; }
+.tweaks .kv.top { margin-bottom: 4px; }
+.tweaks .sect { padding: 10px 12px 2px; color: var(--muted); font-size: 11px; }
+.tweaks .tempty, .tweaks .thint { padding: 4px 12px; line-height: 18px; }
+.tweaks .thint:empty { display: none; }
+
+.tweaks .field { height: 26px; min-width: 60px; max-width: 150px; padding: 0 8px; border-radius: 6px; background: var(--tw-well); color: var(--text); font: 12px var(--font); border: 1px solid var(--tw-well-line); }
+.tweaks select.field { padding-right: 4px; text-overflow: ellipsis; }
+.tweaks input.field { width: 130px; }
+.tweaks .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.tweaks .seg { display: flex; padding: 2px; background: var(--tw-well); border-radius: 7px; flex: none; }
+.tweaks .seg button { height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted-2); font: 12px var(--font); cursor: pointer; white-space: nowrap; }
+.tweaks .seg button[aria-checked="true"] { background: var(--tw-on); color: var(--text); }
+.tweaks .switch { width: 30px; height: 18px; flex: none; border: 0; padding: 0; border-radius: 9px; background: var(--tw-on); position: relative; cursor: pointer; }
+.tweaks .switch span { position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 7px; background: var(--tool); transition: transform .15s ease-out; }
+.tweaks .switch[aria-checked="true"] { background: var(--accent); }
+.tweaks .switch[aria-checked="true"] span { transform: translateX(12px); background: var(--on-accent); }
+.tweaks .slide { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tweaks .slide input[type="range"] { width: 76px; accent-color: var(--accent); }
+.tweaks .slide .num { width: 52px; min-width: 0; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.tweaks .seg button:focus-visible, .tweaks .switch:focus-visible, .tweaks .link:focus-visible, .tweaks .sh:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.tweaks .tnote { padding: 8px 12px 4px; color: var(--muted-2); line-height: 18px; }
+.tweaks .link { padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; cursor: pointer; }
+.tweaks .link:hover { color: #c4d6ef; }
+.tweaks .link[hidden], .tweaks .tnote .dim[hidden] { display: none; }
+.tweaks .tstatus { padding: 0 12px 8px; color: var(--muted-2); line-height: 18px; }
+.tweaks .tstatus:empty { display: none; }
+.tweaks .tstatus.err, .tweaks .tempty.err { color: var(--err); }
+
+/* The canvas chrome makes room for the docked panel. */
+body.tweaks-open #zoom, body.tweaks-open .cpanel { right: 270px; }
+body.tweaks-open #toolbar { left: calc((100vw - 260px) / 2); }
+
+/* Narrow panel (< 600 px): a drawer above the toolbar, folded to its header; the canvas keeps its width. */
+@media (max-width: 599px) {
+  .tweaks { top: auto; left: 10px; right: 10px; bottom: 66px; width: auto; max-height: 45vh; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+  .tweaks .sh { cursor: pointer; border-bottom: 0; }
+  .tweaks.open .sh { border-bottom: 1px solid var(--tw-line); }
+  .tweaks:not(.open) .tbody { display: none; }
+  body.tweaks-open #zoom, body.tweaks-open .cpanel { right: 10px; }
+  body.tweaks-open #toolbar { left: 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tweaks .switch span { transition: none; }
+}

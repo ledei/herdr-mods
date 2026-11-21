@@ -1,0 +1,24 @@
+/* The inspector (V2Select's right panel): key-value rows 28 px, fields 26 px on #26272b, the source line at the foot.
+   Shares .lpanel's frame (layers.css) as .ipanel. */
+.ipanel { right: 10px; width: 240px; overflow: auto; user-select: text; -webkit-user-select: text; }
+.ihead { height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-weight: 600; border-bottom: 1px solid var(--side-line); }
+.iname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ihead .tag { margin-left: auto; flex: none; }
+.isec { padding: 8px 0; border-bottom: 1px solid var(--side-line); }
+.ititle { height: 22px; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 11px; }
+.ikv { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; padding: 0 12px; color: var(--muted-2); }
+.ik { flex: none; }
+.ival { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ifield { height: 26px; width: 96px; min-width: 0; padding: 0 8px; border-radius: 6px; background: var(--ph); color: var(--text); font: 12px var(--font); border: 1px solid var(--field-2); }
+.ifield.wide { flex: 1; width: auto; }
+.ifield::placeholder { color: var(--muted); }
+.ifield:focus-visible, .iswatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.ifield:disabled { opacity: .5; }
+.iswatch { width: 16px; height: 16px; flex: none; padding: 0; border: 1px solid var(--tb-line); border-radius: 3px; background: var(--c); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.iswatch::-webkit-color-swatch-wrapper { padding: 0; }
+.iswatch::-webkit-color-swatch { border: 0; border-radius: 2px; background: var(--c) !important; }
+.inote { padding: 0 12px; color: var(--err); line-height: 18px; overflow-wrap: anywhere; }
+.inote:empty { display: none; }
+.inote.pad { padding: 10px 12px; color: var(--muted-2); }
+.inote.pad.err { color: var(--err); }
+.isrc { padding: 10px 12px; color: var(--muted-2); line-height: 18px; overflow-wrap: anywhere; }

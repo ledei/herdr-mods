@@ -1,0 +1,61 @@
+/* Context to chat (T12, V2Send): the attachments tray, the markup editor, the Record button while it films.
+   Tokens from shell.css; the markup colour is the design's --err coral. */
+body.capturing #view { cursor: crosshair; }
+body.capturing .board > iframe { pointer-events: none; } /* Mark up: the drag is the shell's, not the board's */
+.tool.recording { color: var(--err); }
+.tool.recording .ico { animation: cap-pulse 1s ease-in-out infinite alternate; }
+@keyframes cap-pulse { to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .tool.recording .ico { animation: none; } }
+
+/* ---------- the tray: above the toolbar ---------- */
+.cap-tray { position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 120px); overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--tb); border: 1px solid var(--tb-line); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); z-index: 7; user-select: text; -webkit-user-select: text; }
+.cap-tray[hidden], .cap-rec[hidden] { display: none; }
+.cap-rec { display: flex; flex-direction: column; gap: 8px; }
+.cap-title { font: 600 13px var(--font); }
+.cap-rec img { display: block; max-width: 100%; max-height: 150px; object-fit: contain; object-position: left top; border-radius: 4px; }
+.cap-rec .dim { line-height: 18px; }
+.cap-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cap-chip { height: 24px; max-width: 100%; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 12px; background: var(--ph); border: 1px solid var(--ghost-line); color: var(--text-2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-chip .ico { width: 12px; height: 12px; }
+.cap-x { border: 0; background: transparent; color: var(--muted-2); padding: 0; display: flex; cursor: pointer; }
+.cap-x:hover { color: var(--text); }
+.cap-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.cap-field { display: flex; }
+.cap-field input { flex: 1; min-width: 0; height: 32px; border-radius: 8px; border: 1px solid #555; background: #232323; color: var(--text); padding: 0 10px; font: 12px var(--font); }
+.cap-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.cap-acts { display: flex; justify-content: flex-end; gap: 6px; }
+.cap-acts .prim .ico { width: 14px; height: 14px; }
+.cap-acts .prim:disabled { opacity: .5; cursor: default; }
+.cap-acts .prim span { overflow: hidden; text-overflow: ellipsis; }
+.cap-note:empty { display: none; }
+.cap-fold { display: none; align-self: flex-start; }
+.cap-tray.playing .cap-fold { display: inline-flex; }
+.cap-tray.folded { flex-direction: row; align-items: center; justify-content: space-between; padding: 8px 12px; }
+.cap-tray.folded > :not(.cap-fold, .cap-acts, .cap-note) { display: none; }
+.cap-tray.folded .cap-fold { align-self: center; }
+
+/* ---------- the markup editor: the snapshot, fitted, with its own toolbar ---------- */
+.cap-edit { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: calc(16px + var(--top)) 16px 14px; background: rgba(16, 17, 20, .88); }
+.cap-head { display: flex; align-items: baseline; gap: 10px; max-width: 100%; font-size: 12px; }
+.cap-head b { font-weight: 600; font-size: 13px; }
+.cap-head .dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; max-width: 100%; }
+.cap-stage canvas { max-width: 100%; max-height: 100%; border-radius: 6px; cursor: crosshair; touch-action: none; background: var(--ph); box-shadow: 0 0 0 1px var(--line); }
+.cap-label { position: absolute; width: 160px; height: 24px; padding: 0 7px; border-radius: 5px; border: 0; background: #f07a5a; color: #2a0e06; font: 600 11px var(--font); }
+.cap-label::placeholder { color: rgba(42, 14, 6, .6); }
+.cap-label:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.cap-bar { height: 54px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 7px; background: var(--tb); border: 1px solid var(--tb-line); border-radius: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); max-width: 100%; }
+.cap-bar .sep { width: 1px; height: 28px; background: var(--tb-line); margin: 0 7px; flex: none; }
+.cap-bar .ghost { margin-right: 4px; }
+
+.cap-toast { position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 8px 12px; border-radius: 8px; background: var(--tb); border: 1px solid var(--tb-line); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 12px; z-index: 8; }
+.cap-toast[hidden] { display: none; }
+
+@media (max-width: 600px) {
+  .cap-tray { bottom: 68px; width: calc(100vw - 32px); }
+  .cap-bar { height: 48px; padding: 0 5px; }
+  .cap-bar .tool { width: 34px; height: 34px; }
+  .cap-bar .sep { margin: 0 3px; }
+}
+.cap-tray.folded .cap-acts .ghost { display: none; }

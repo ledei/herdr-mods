@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- The Atelier shell (T4): the canvas of live boards inside herdr's native page. Opened as
+     /__shell/index.html#canvas=<id>[&board=<file>]; the mod then hands over the token with window.__atelierInit(token).
+     Plain ES modules, no build step. Look: the approved V2Canvas / V2States boards. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="layers.css">
+<link rel="stylesheet" href="inspector.css">
+<link rel="stylesheet" href="tweaks.css">
+<link rel="stylesheet" href="variants.css">
+<link rel="stylesheet" href="capture.css">
+<script type="module" src="main.js"></script>
+</head>
+<body data-state="starting">
+<main id="view" aria-label="Canvas">
+  <div id="layer"></div>
+</main>
+
+<nav id="pages" role="tablist" aria-label="Pages" hidden></nav>
+<button id="zoom" class="ghost quiet" type="button" title="Fit the page (⇧1)" hidden>100%</button>
+
+<div id="errcard" role="alert" hidden>
+  <div class="err-head"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><b></b>
+    <button class="x" type="button" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <p class="dim"></p>
+</div>
+
+<div id="toolbar" role="toolbar" aria-label="Atelier tools" hidden>
+  <button class="tool" data-tool="select" type="button" aria-label="Select (V)" title="Select (V)" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.7a.5.5 0 0 1 .7-.7l16 6.5a.5.5 0 0 1-.1 1l-6.1 1.6a2 2 0 0 0-1.4 1.4l-1.6 6.1a.5.5 0 0 1-.9.1z" fill="currentColor"/></svg></button>
+  <button class="tool" data-tool="comment" type="button" aria-label="Comment (C)" title="Comment (C)" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg><span class="count" hidden></span></button>
+  <button class="tool" data-tool="area" type="button" aria-label="Select area (R)" title="Select area (R)" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg></button>
+  <button class="tool" type="button" aria-label="Mark up (M)" title="Coming soon" aria-pressed="false" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.2 6.8a1 1 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"/><path d="m15 5 4 4"/></svg></button>
+  <button class="tool" type="button" aria-label="Screenshot (S)" title="Coming soon" aria-pressed="false" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg></button>
+  <button class="tool" type="button" aria-label="Record (⇧R)" title="Coming soon" aria-pressed="false" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg></button>
+</div>
+
+<div id="state" role="status">
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="title">Starting Atelier…</div>
+  <div class="dim small" id="state-sub"></div>
+</div>
+
+<template id="empty-state">
+  <svg class="ico big" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></svg>
+  <div class="title">Open a canvas</div>
+  <div class="dim desc">A folder with canvas.json and .dc.html boards, like a Claude Design export. Pick one with the canvas button above.</div>
+</template>
+</body>
+</html>
