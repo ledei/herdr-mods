@@ -1,14 +1,12 @@
 # browser
 
-A browser panel for Herdr, with two ways to show the page:
+A browser panel for Herdr. The `herdr-web` helper shows a real WebKit view in its own borderless window, kept
+exactly over the panel's page area. Scrolling, clicks and keys go straight to it, so it feels like any Mac
+app. The mod keeps the toolbar and tabs.
 
-- **Native** (default): the `herdr-web` helper shows a real WebKit view in its own borderless window, kept
-  exactly over the panel's page area. Scrolling, clicks and keys go straight to it, so it feels like any Mac
-  app. The mod keeps the toolbar and tabs.
-- **Stream**: the `herdr-browser` helper runs headless Chrome and the panel draws its JPEG frames. Slower
-  and laggier, but an AI agent can drive the same tab over MCP (see `herdr-browser --help`).
-
-The **Stream** / **Native** pill in the toolbar switches between them.
+AI agents drive their own tabs in the same view through `herdr-browser`, an MCP server and CLI that talks to
+`herdr-web` (see `herdr-browser --help`). You watch live and can still click and type. Each agent terminal
+gets its own tab group; the panel shows the group of the agent in the Herdr tab you look at.
 
 ## Install
 
@@ -17,7 +15,7 @@ The **Stream** / **Native** pill in the toolbar switches between them.
 ```
 
 It installs the `browser`, `browser-import` and `tabs-browser` mods, builds `herdr-web` (needs `swiftc`,
-from Xcode or the Command Line Tools) and, if `cargo` is installed, `herdr-browser`, then adds the
+from Xcode or the Command Line Tools) and, if `cargo` is installed, `herdr-browser` (the agent tools and Sign-ins), then adds the
 `browser` layout. A layout you already have is kept. Open the layout, or its **Browser** pill in the
 `tabs-browser` tab bar.
 
@@ -32,7 +30,7 @@ from Xcode or the Command Line Tools) and, if `cargo` is installed, `herdr-brows
   screenshot path) to paste into an agent's chat.
 - **Sign-ins** copies the sign-ins of sites you pick from one of your Chrome profiles into the view. It
   reads Chrome's cookie file and needs its Keychain key: macOS asks once (choose Always Allow to stop the
-  prompt). It needs the Chrome helper (`cargo`).
+  prompt). It needs `herdr-browser` (`cargo`) and Chrome, and only for importing.
 
 ## Trade-offs
 
@@ -42,15 +40,16 @@ The native view is a separate window over a hole the panel leaves, as in [ios-si
   page while it is open.
 - A window of another app that covers a whole edge strip of the page trims the page; a window over a corner
   or the middle sits above it.
-- The native view has its own cookie store. Chrome sign-in import, Select for agents and the MCP tools
-  belong to Stream mode.
+- The native view has its own cookie store, kept between runs. Sign-ins copied from Chrome land there, and
+  every agent's tab group shares it.
 - Docked only: floating windows and panes inside tabs are not supported.
 
 ## How it works
 
-`herdr-web` (`helpers/web/main.swift`) listens on 127.0.0.1 and writes `<home>/data/herdr-web/port-<pid>`
+`herdr-web` (`helpers/web/`, protocol in `helpers/web/PROTOCOL.md`) listens on 127.0.0.1 and writes `<home>/data/herdr-web/port-<pid>`
 (`<port>\n<token>`, mode 0600), one per Herdr process. The first line from the mod is
-`{"op":"hello","token":…}`; lines are JSON. The mod sends `rect` (the page area in window units plus the
+`{"op":"hello","token":…,"v":2,"role":"panel"}`; lines are JSON. Agents connect the same way with
+`role:"agent"` (the `herdr-browser` front) and the cookie import with `role:"cookies"`. The mod sends `rect` (the page area in window units plus the
 window size) and `lease` every 250 ms while the panel draws: without a lease the window hides. It also sends
 `tab`, `select`, `close`, `go`, `back`, `forward`, `reload`, `reloadHard`, `pick`, `theme` and `cookies`.
 The helper answers with `tab` (url, title, loading, history state, active), `key` (shortcuts it took),

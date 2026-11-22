@@ -5,7 +5,7 @@ Mods for [Herdr](https://github.com/herdrdev/herdr-app) that install into the st
 | Mod | What it does |
 |---|---|
 | [ios-sim](ios-sim/README.md) | A live iOS Simulator docked on the right of the Herdr window, with touch, keys, hardware buttons, rotation and an annotate mode that turns picked screen elements into a prompt for your coding agent. |
-| [browser](browser/README.md) | A browser panel with a real native WebKit view (or a headless-Chrome stream) docked in the Herdr window: tabs, element select that copies XML for your coding agent, and Chrome sign-in import. |
+| [browser](browser/README.md) | A browser panel with a real native WebKit view docked in the Herdr window: tabs, element select that copies XML for your coding agent, tools for AI agents to drive their own tabs, and Chrome sign-in import. |
 | [atelier](atelier/README.md) | Live design canvases (Claude Design `.dc.html` boards) in a side panel: pan and zoom, pinned comments your agent answers, Play to click through a board as a prototype, variants, and MCP tools so Claude Code, Codex and opencode edit the canvas while you watch. |
 
 ## Install with your AI agent

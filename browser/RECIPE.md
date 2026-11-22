@@ -4,7 +4,7 @@ For a coding agent. Read `~/.config/herdr-app/AGENTS.md` first (Herdr's own mod 
 macOS only. Do not delete or replace any file the user already has: a layout that exists stays as it is.
 
 1. Check the tools: `xcrun --find swiftc` must succeed (else tell the user to run `xcode-select --install`).
-   `cargo` is optional; without it only Stream mode, the agent tools and Sign-ins are skipped.
+   `cargo` is optional; without it the agent tools and Sign-ins are skipped (importing Sign-ins also needs Chrome).
 2. Get the source: `git clone https://github.com/ledei/herdr-mods.git` into a scratch folder (not into the Herdr home).
 3. Run `./install.sh browser` from that clone. It installs the `browser`, `browser-import` and `tabs-browser`
    mods into `~/.config/herdr-app/mods/`, builds `herdr-web` (and `herdr-browser` if cargo exists) into

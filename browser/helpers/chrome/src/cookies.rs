@@ -1,6 +1,6 @@
 //! `herdr-browser cookies ...`: copy sign-ins (cookies) from the user's own Chrome into the
-//! helper's profile. User-driven only: a CLI the Browser panel's import dialog runs. It is not an
-//! MCP tool or an agent op, and the helper refuses `import_cookies` from agent connections.
+//! herdr-web's store. User-driven only: a CLI the Browser panel's import dialog runs. It is not an
+//! MCP tool or an agent op, and herdr-web refuses `cookies` from agent connections.
 //!
 //! Chrome on macOS stores each cookie value AES-128-CBC encrypted (prefix `v10`, IV 16 spaces,
 //! PKCS7) under a key derived by PBKDF2-HMAC-SHA1(Keychain "Chrome Safe Storage" password,
@@ -11,9 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
-use tokio_tungstenite::tungstenite::Message;
 
 /// Seconds between 1601-01-01 (Chrome's epoch) and 1970-01-01.
 const CHROME_EPOCH_OFFSET: i64 = 11_644_473_600;
@@ -77,7 +75,8 @@ pub fn decrypt(key: &[u8; 16], blob: &[u8], db_version: i64) -> Option<Vec<u8>> 
     Some(buf)
 }
 
-/// The same scheme forwards (selftest fixtures and unit tests).
+/// The same scheme forwards (unit tests).
+#[cfg(test)]
 pub fn encrypt(key: &[u8; 16], host_key: &str, value: &[u8], db_version: i64) -> Vec<u8> {
     use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
     use sha2::Digest;
@@ -174,7 +173,6 @@ struct Args {
     sites: Vec<String>,
     chrome_dir: PathBuf,
     password_env: Option<String>,
-    native: bool, // --target native: copy into the native (WebKit) view, not the Chrome one
 }
 
 fn default_chrome_dir() -> PathBuf {
@@ -183,7 +181,7 @@ fn default_chrome_dir() -> PathBuf {
 }
 
 fn parse_args(argv: &[String]) -> Result<Args, String> {
-    let mut a = Args { cmd: String::new(), profile: None, sites: Vec::new(), chrome_dir: default_chrome_dir(), password_env: None, native: false };
+    let mut a = Args { cmd: String::new(), profile: None, sites: Vec::new(), chrome_dir: default_chrome_dir(), password_env: None };
     let mut i = 0;
     while i < argv.len() {
         let flag = argv[i].clone();
@@ -198,7 +196,10 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
             "--sites" => {
                 a.sites = val()?.split(',').map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()).collect();
             }
-            "--target" => a.native = val()? == "native",
+            // herdr-web is the only target now; `--target native` is still accepted.
+            "--target" => {
+                val()?;
+            }
             "--chrome-dir" => a.chrome_dir = PathBuf::from(val()?),
             // Test only: read the Keychain password from this env var instead of `security`.
             "--keychain-password-env" => a.password_env = Some(val()?),
@@ -292,29 +293,21 @@ fn now_chrome() -> i64 {
 
 // ---------------------------------------------------------------- the helper
 
-fn port_file(app_home: &Path) -> Option<(String, String)> {
-    let body = std::fs::read_to_string(app_home.join("data").join("herdr-browser").join("port")).ok()?;
-    let mut l = body.lines();
-    Some((l.next()?.trim().to_string(), l.next()?.trim().to_string()))
+fn hello() -> Value {
+    json!({"op": "hello", "v": 2, "role": "cookies"})
 }
 
-/// Sites open in the running helper's tabs (every group). Never starts the helper.
+/// Sites open in herdr-web's tabs (every group), from the `groups` snapshot it sends after the
+/// hello. Never starts herdr-web.
 async fn open_sites(app_home: &Path) -> Vec<String> {
-    let Some((port, token)) = port_file(app_home) else { return Vec::new() };
-    let url = format!("ws://127.0.0.1:{port}/?token={token}");
     let fut = async {
-        let (mut ws, _) = tokio_tungstenite::connect_async(url).await.ok()?;
-        ws.send(Message::text(json!({"t": "ui", "v": 1}).to_string())).await.ok()?;
-        while let Some(Ok(m)) = ws.next().await {
-            if let Message::Text(t) = m {
-                let v: Value = serde_json::from_str(t.as_str()).unwrap_or_default();
-                if v["t"] == "state" {
-                    let _ = ws.close(None).await;
-                    return Some(v);
-                }
+        let mut h = crate::native::find(app_home, &hello(), None).await.ok()?;
+        loop {
+            let v = h.next().await.ok()?;
+            if v["ev"] == "groups" {
+                return Some(v);
             }
         }
-        None
     };
     let Ok(Some(state)) = tokio::time::timeout(Duration::from_secs(2), fut).await else { return Vec::new() };
     let mut out: Vec<String> = Vec::new();
@@ -429,46 +422,38 @@ async fn cmd_sites(a: &Args, app_home: &Path) -> Result<Value, String> {
         .collect::<Vec<_>>()))
 }
 
-/// Decrypt the picked sites' cookies and hand them to the helper (role `ui`). Prints
-/// `{imported, skipped, sites}`; never a value.
-/// Hands the cookies to every running native view helper (one per Herdr window) over its local socket; returns
+/// Hands the cookies to every running herdr-web (one per Herdr app) as role `cookies`; returns
 /// (imported, skipped) as the first one that answered reports them.
-fn send_native(app_home: &Path, cookies: &[Value]) -> Result<(u64, u64), String> {
-    use std::io::{BufRead, BufReader, Write};
-    use std::net::{SocketAddr, TcpStream};
-    let dir = app_home.join("data/herdr-web");
+async fn send_cookies(app_home: &Path, cookies: &[Value]) -> Result<(u64, u64), String> {
     let mut result: Option<(u64, u64)> = None;
-    let entries = std::fs::read_dir(&dir).map_err(|_| "the native view is not running: open the Browser panel first".to_string())?;
-    for e in entries.flatten() {
-        if !e.file_name().to_string_lossy().starts_with("port-") {
-            continue;
-        }
-        let text = std::fs::read_to_string(e.path()).unwrap_or_default();
-        let mut it = text.lines();
-        let (Some(port), Some(token)) = (it.next().and_then(|p| p.trim().parse::<u16>().ok()), it.next()) else { continue };
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else { continue };
-        let _ = s.set_read_timeout(Some(Duration::from_secs(20)));
-        let hello = json!({"op": "hello", "token": token.trim()}).to_string();
-        let op = json!({"op": "cookies", "cookies": cookies}).to_string();
-        if s.write_all(format!("{hello}\n{op}\n").as_bytes()).is_err() {
-            continue;
-        }
-        let mut r = BufReader::new(s);
-        let mut line = String::new();
-        while r.read_line(&mut line).unwrap_or(0) > 0 {
-            if let Ok(v) = serde_json::from_str::<Value>(&line) {
+    let mut op = json!({"op": "cookies", "cookies": cookies});
+    let mut helpers = crate::native::connect_all(app_home, &hello()).await;
+    for h in helpers.iter_mut().flatten() {
+        let fut = async {
+            h.send(&op).await.ok()?;
+            loop {
+                // The `groups` snapshot comes first.
+                let v = h.next().await.ok()?;
                 if v["ev"] == "cookies" {
-                    result.get_or_insert((v["imported"].as_u64().unwrap_or(0), v["skipped"].as_u64().unwrap_or(0)));
-                    break;
+                    return Some((v["imported"].as_u64().unwrap_or(0), v["skipped"].as_u64().unwrap_or(0)));
                 }
             }
-            line.clear();
+        };
+        if let Ok(Some(r)) = tokio::time::timeout(Duration::from_secs(20), fut).await {
+            result.get_or_insert(r);
         }
     }
-    result.ok_or_else(|| "the native view did not answer: open the Browser panel first".to_string())
+    for c in op["cookies"].as_array_mut().into_iter().flatten() {
+        if let Some(Value::String(s)) = c.get_mut("value") {
+            wipe(s);
+        }
+    }
+    helpers?;
+    result.ok_or_else(|| "herdr-web did not answer: open the Browser panel in Herdr".to_string())
 }
 
+/// Decrypt the picked sites' cookies and hand them to herdr-web. Prints `{imported, skipped,
+/// sites}`; never a value.
 async fn cmd_import(a: &Args, app_home: &Path) -> Result<Value, String> {
     if a.sites.is_empty() {
         return Err("--sites is required".into());
@@ -533,8 +518,8 @@ async fn cmd_import(a: &Args, app_home: &Path) -> Result<Value, String> {
     picked.dedup();
     let (imported, helper_skipped) = if cookies.is_empty() {
         (0, 0)
-    } else if a.native {
-        let r = send_native(app_home, &cookies);
+    } else {
+        let r = send_cookies(app_home, &cookies).await;
         for c in cookies.iter_mut() {
             if let Some(Value::String(s)) = c.get_mut("value") {
                 wipe(s);
@@ -544,22 +529,6 @@ async fn cmd_import(a: &Args, app_home: &Path) -> Result<Value, String> {
             wipe(v);
         }
         r?
-    } else {
-        let mut conn = crate::mcp::Conn::new_ui(app_home.to_path_buf());
-        let r = conn.request("import_cookies", &json!({"cookies": cookies})).await;
-        for c in cookies.iter_mut() {
-            if let Some(Value::String(s)) = c.get_mut("value") {
-                wipe(s);
-            }
-        }
-        for v in values.iter_mut() {
-            wipe(v);
-        }
-        let res = r?;
-        if res["ok"] != true {
-            return Err(res["error"].as_str().unwrap_or("the helper refused the import").to_string());
-        }
-        (res["data"]["imported"].as_u64().unwrap_or(0), res["data"]["skipped"].as_u64().unwrap_or(0))
     };
     Ok(json!({"imported": imported, "skipped": skipped + helper_skipped, "sites": picked}))
 }
@@ -640,9 +609,6 @@ mod tests {
         assert_eq!(c["domain"], ".example.com");
         assert!(c.get("sameSite").is_none());
         assert!(c.get("expires").is_none());
-        // It is a valid CDP CookieParam.
-        let p: chromiumoxide::cdp::browser_protocol::network::CookieParam = serde_json::from_value(c).unwrap();
-        assert_eq!(p.domain.as_deref(), Some(".example.com"));
     }
 
     #[test]
@@ -652,5 +618,28 @@ mod tests {
         assert!(!valid_site("a'b.com"));
         assert!(!valid_site("a%.com"));
         assert!(!valid_site(""));
+    }
+
+    #[tokio::test]
+    async fn talks_to_herdr_web_as_the_cookie_role() {
+        use crate::native::tests::{fake_web, FakePid, Home};
+        fn answer(_: usize, v: &Value) -> Vec<Value> {
+            if v["op"] != "cookies" {
+                return vec![];
+            }
+            vec![json!({"ev": "cookies", "imported": v["cookies"].as_array().map(|a| a.len()), "skipped": 1})]
+        }
+        let home = Home::new("cookies");
+        assert_eq!(send_cookies(&home.0, &[json!({"name": "a", "value": "v"})]).await, Err(crate::native::OPEN_PANEL.into()));
+        assert!(open_sites(&home.0).await.is_empty());
+        let fake = FakePid::new();
+        let groups = json!({"ev": "groups", "shown": "user", "groups": [
+            {"id": "user", "tabs": [{"url": "https://mail.google.com/x"}, {"url": "about:blank"}]},
+            {"id": "t:w1", "tabs": [{"url": "http://localhost:3000/"}, {"url": "https://www.google.com/"}]}]});
+        let (port, _, seen) = fake_web(json!([{"ev": "hello", "v": 2, "role": "cookies"}, groups]), answer).await;
+        home.port_file(fake.pid(), port);
+        assert_eq!(open_sites(&home.0).await, vec!["google.com".to_string(), "localhost".to_string()]);
+        assert_eq!(send_cookies(&home.0, &[json!({"name": "a", "value": "v"}), json!({"name": "b", "value": "w"})]).await, Ok((2, 1)));
+        assert!(seen.lock().unwrap().iter().filter(|v| v["op"] == "hello").all(|v| v["role"] == "cookies" && v["v"] == 2));
     }
 }

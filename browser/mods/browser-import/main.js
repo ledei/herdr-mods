@@ -11,7 +11,6 @@ import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
 import { exec, appHome, checking, props, closeOverlay, theme, setShared } from "herdr";
 
 const DIALOG = "herdr-browser.dialog"; // "<ms>" while this dialog is open, "closed" after: the native page window sits above Herdr, so the panel hides it meanwhile
-const IMPORTED = "herdr-browser.imported"; // the panel reloads its tab when this changes
 const MAX_ROWS = 300;
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -125,7 +124,6 @@ export default class Import extends View {
         const r = await cli(["import", "--profile", this.profile.dir, "--sites", sites.join(","), ...(props()?.native ? ["--target", "native"] : [])], 600_000);
         this.copied = Array.isArray(r?.sites) ? r.sites.length : typeof r?.sites === "number" ? r.sites : sites.length;
         this.step = "done";
-        setShared(IMPORTED, Date.now());
       } catch (e) { this.error = e.message; this.step = "error"; }
       cx.notify();
     });
