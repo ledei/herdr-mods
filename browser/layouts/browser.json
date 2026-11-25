@@ -180,35 +180,11 @@
               "size": {
                 "weight": 1
               }
-            },
-            {
-              "id": "usage-limits",
-              "type": "block",
-              "size": {
-                "weight": 2.2
-              },
-              "min": 130,
-              "content": {
-                "mod": "usage-limits"
-              }
             }
           ]
         }
       ],
       "resizable": false
-    },
-    {
-      "id": "ios-sim",
-      "type": "block",
-      "size": {
-        "px": 420
-      },
-      "min": 320,
-      "max": 560,
-      "hidden": true,
-      "content": {
-        "mod": "ios-sim"
-      }
     }
   ],
   "background": "canvas",
@@ -224,5 +200,6 @@
   "traffic_lights": [
     12,
     16
-  ]
+  ],
+  "preview": "layouts/browser.svg"
 }

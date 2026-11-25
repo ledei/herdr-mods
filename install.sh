@@ -83,7 +83,7 @@ fi
 
 if [ -d "$src/layouts" ] && [ $shipped = no ]; then
   mkdir -p "$home/layouts"
-  for f in "$src/layouts"/*.json; do
+  for f in "$src/layouts"/*.json "$src/layouts"/*.svg "$src/layouts"/*.png; do # a layout and its preview picture
     [ -e "$f" ] || continue
     dest="$home/layouts/$(basename "$f")"
     if [ -e "$dest" ]; then
