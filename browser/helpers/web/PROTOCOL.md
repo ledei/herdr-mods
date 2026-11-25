@@ -11,7 +11,7 @@ Words used below:
 - "Swift" means herdr-web and "Rust" means herdr-browser.
 - A **group** is a set of tabs: the user's (`"user"`) or one agent terminal's.
 - The **shown group** is the group whose tabs the panel shows.
-- The **lease** is live while a panel sent `rect` or `lease` in the last 0.7 s.
+- The **lease** is live while a panel sent `rect` or `lease` in the last 3 s. The panel sends one every 250 ms and an explicit `hide` when it closes, so the margin only matters when Herdr stalls (it can skip about a second of frames). While no lease is live the helper ticks at 4 Hz instead of 60.
 
 Anything this file does not fix is up to the implementer. If an implementer has to break a rule here, they report it; they do not quietly diverge.
 
