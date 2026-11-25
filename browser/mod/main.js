@@ -5,7 +5,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input } from "gpui-base";
-import { exec, appHome, checking, notify, nextCommand, theme, spaces, panes, shared, openOverlay } from "herdr";
+import { exec, appHome, checking, notify, nextCommand, theme, spaces, panes, shared, openOverlay, layout, window } from "herdr";
 import net from "net";
 import { readFile, exists } from "fs/promises";
 
@@ -23,6 +23,14 @@ const KEYS_ID = JSON.stringify(BINDINGS); // part of the signature: a hot reload
 // that apply clears our bindings again: keep rebinding this long after the file changes.
 const KEYS_SETTLE = 12000;
 const MAX_TABS = 9; // the helper's limit per group
+
+const findNode = (n, id) => (n?.id === id ? n : (n?.children ?? []).map((c) => findNode(c, id)).find(Boolean));
+// The docked panel is open on the browser: true even when Herdr skips a frame (it can stall about every 30 s), which
+// "did this copy draw since the last tick" alone reads as closed, hiding the page until the pointer moves over it.
+const panelOpen = () => {
+  const root = layout(), panel = findNode(root, "panel"), body = findNode(root, "panel-body");
+  return Boolean(panel && !panel.hidden && body?.active === "browser" && window()?.visible !== false);
+};
 
 const utf8 = (bytes) => decodeURIComponent(Array.from(bytes, (b) => "%" + b.toString(16).padStart(2, "0")).join(""));
 
@@ -316,10 +324,11 @@ export default class Browser extends View {
     }
     const bg = theme().background; // an empty tab and the window show this until a page paints
     if (bg && bg !== this.sentBg && this.nsock === this.themeSock) { this.sentBg = bg; this.nraw({ op: "theme", bg }); }
-    if (this.rendered) this.nativeSync();
+    const open = panelOpen();
+    if (this.rendered || open) this.nativeSync();
     else if (this.shown) { this.nraw({ op: "hide" }); this.shown = false; this.lastRect = ""; }
     this.rendered = false;
-    if (this.shown) cx.notify(); // draws again only if shown: that is what the next lease checks
+    if (this.shown || open) cx.notify(); // draws again only if shown: that is what the next lease checks
   }
 
   showError(text, cx) {

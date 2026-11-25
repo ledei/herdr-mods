@@ -50,7 +50,7 @@ The native view is a separate window over a hole the panel leaves, as in [ios-si
 (`<port>\n<token>`, mode 0600), one per Herdr process. The first line from the mod is
 `{"op":"hello","token":…,"v":2,"role":"panel"}`; lines are JSON. Agents connect the same way with
 `role:"agent"` (the `herdr-browser` front) and the cookie import with `role:"cookies"`. The mod sends `rect` (the page area in window units plus the
-window size) and `lease` every 250 ms while the panel draws: without a lease the window hides. It also sends
+window size) and `lease` every 250 ms while the panel is open (from the layout, so a skipped frame does not count as closed): without a lease for 3 s the window hides. It also sends
 `tab`, `select`, `close`, `go`, `back`, `forward`, `reload`, `reloadHard`, `pick`, `theme` and `cookies`.
 The helper answers with `tab` (url, title, loading, history state, active), `key` (shortcuts it took),
 `picked` and `cookies`. It places its window above Herdr's with

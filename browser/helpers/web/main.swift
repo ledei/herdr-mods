@@ -537,8 +537,17 @@ func sendGroups(force: Bool = false) {
 
 // MARK: Herdr's window
 
+// One window-server query per tick: herdrWindow and visibleRect both need it, 60 times a second while shown.
+var tickList: [[String: Any]]?
+func windowList() -> [[String: Any]] {
+  if let l = tickList { return l }
+  let l = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+  tickList = l
+  return l
+}
+
 func herdrWindow() -> (id: Int, bounds: CGRect)? {
-  let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+  let list = windowList()
   var best: (Int, CGRect)?
   for w in list {
     guard (w[kCGWindowOwnerPID as String] as? Int32) == herdrPid, (w[kCGWindowLayer as String] as? Int) == 0,
@@ -555,7 +564,7 @@ func herdrWindow() -> (id: Int, bounds: CGRect)? {
 // Any other overlap returns `complex`: then we must stay just above Herdr's window so that window keeps covering us.
 func visibleRect(_ herdrId: Int, _ r0: CGRect) -> (rect: CGRect, complex: Bool) {
   var r = r0
-  let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+  let list = windowList()
   let me = getpid()
   for w in list {
     guard let n = w[kCGWindowNumber as String] as? Int else { continue }
@@ -594,9 +603,13 @@ func removePortFile() {
 }
 func quit() { removePortFile(); exit(0) }
 
+// 60 Hz only while a panel holds a lease (the window must track Herdr's); otherwise a 4 Hz idle tick.
+var fastTimer: Timer?
+func startFast() { if fastTimer == nil { fastTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { _ in tick() } } }
 var lastSecond = Date.distantPast
 var lastMinute = Date()
 func tick() {
+  defer { tickList = nil } // callers outside a tick get a fresh list
   if Date().timeIntervalSince(lastSecond) >= 1 {
     lastSecond = Date()
     if kill(herdrPid, 0) != 0 { quit() } // Herdr is gone
@@ -606,6 +619,7 @@ func tick() {
   sendGroups()
   guard let r = rect, Date() < leaseUntil, current != nil, let h = herdrWindow(), r.w > 8, r.h > 8, r.vw > 0, r.vh > 0 else {
     if winShown { hideWin() }
+    fastTimer?.invalidate(); fastTimer = nil
     return
   }
   // The page rect is in Herdr's content units; scale to screen points and offset by the content origin.
@@ -716,14 +730,14 @@ func panelOp(_ c: Conn, _ m: [String: Any]) {
   case "rect":
     func n(_ k: String) -> Double { (m[k] as? NSNumber)?.doubleValue ?? 0 }
     rect = (n("x"), n("y"), n("w"), n("h"), n("vw"), n("vh"))
-    leaseUntil = Date().addingTimeInterval(0.7)
+    leaseUntil = Date().addingTimeInterval(3); startFast() // a lease comes every 250 ms and hiding is explicit; Herdr can stall ~1 s
     resizeStage(n("w"), n("h")) // refined to points in `tick` once Herdr's window is known
   case "theme":
     if let c = (m["bg"] as? String).flatMap(hexColor) {
       themeBg = c; win.backgroundColor = c
       for t in tabsById.values { t.web.underPageBackgroundColor = c }
     }
-  case "lease": leaseUntil = Date().addingTimeInterval(0.7)
+  case "lease": leaseUntil = Date().addingTimeInterval(3); startFast() // a lease comes every 250 ms and hiding is explicit; Herdr can stall ~1 s
   case "hide": rect = nil; leaseUntil = .distantPast; if winShown { hideWin() }
   case "tab":
     if let id = id, let t = tabsById[id] { activate(t); return }
@@ -879,5 +893,5 @@ listener.stateUpdateHandler = { st in
   }
 }
 listener.start(queue: .main)
-Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { _ in tick() }
+Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in tick() }
 app.run()
