@@ -12,7 +12,8 @@ macOS only. Do not delete or replace any file the user already has: a layout tha
    Herdr's home is `$HERDR_APP_HOME` if set.
 4. Validate: `herdr-app check ~/.config/herdr-app/mods/browser` and the same for `browser-import`.
    Both must print `check passed`.
-5. Tell the user to restart Herdr, then open the `browser` layout or the **Browser** pill, and move the
-   pointer over the page once. Features and limits are in `browser/README.md`.
+5. Merge `browser/keys.json` into the user's `keys.json` (add its section; ask before replacing a key they use).
+6. Tell the user to restart Herdr, then open the `browser` layout and the **Browser** pill (or cmd-shift-b),
+   and move the pointer over the page once. Features and limits are in `browser/README.md`.
 
 Report what was installed, what was skipped (and why), and the output of the checks.

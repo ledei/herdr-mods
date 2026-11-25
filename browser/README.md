@@ -21,13 +21,18 @@ from Xcode or the Command Line Tools) and, if `cargo` is installed, `herdr-brows
 
 ## Use
 
-- Move the pointer over the page once after opening the panel: the mod learns where the page area is from
-  a mouse event.
+- **Open and close** with the **Browser** pill, the palette's "Toggle browser", or cmd-shift-b. For the key,
+  add `"layout:browser": { "cmd-shift-b": "tabs-browser.browser" }` to `keys.json` (see `keys.json` here).
+- The first time in a layout, move the pointer over the page once: the mod learns where the page area is from a
+  mouse event, then remembers it for that layout.
+- **Localhost links** (`localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`) that you Cmd-click in a terminal open in
+  the panel, in a new tab unless the active one is empty. Other links go to your usual browser.
 - Address bar, back, forward, reload and tabs are in the panel. Shortcuts while the page has the
   keyboard: cmd-R and shift-cmd-R (reload, ignoring the cache), cmd-[ and cmd-] (history), cmd-T, cmd-W,
   cmd-L and cmd-1 to cmd-9; cmd-C, V, X, A and Z work in the page.
-- **Select** picks an element on the page and copies it as XML (tag, box, text, styles, ancestors, HTML and a
-  screenshot path) to paste into an agent's chat.
+- **Select** picks elements on the page. Each one is pasted as XML (tag, box, text, styles, ancestors, HTML and a
+  screenshot path) into the focused terminal, without Enter, and Select stays on: pick several, then write
+  your message to the agent and send it. Esc or Select again stops.
 - **Sign-ins** copies the sign-ins of sites you pick from one of your Chrome profiles into the view. It
   reads Chrome's cookie file and needs its Keychain key: macOS asks once (choose Always Allow to stop the
   prompt). It needs `herdr-browser` (`cargo`) and Chrome, and only for importing.

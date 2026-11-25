@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, ScrollHandle } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand, checking } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -9,6 +9,14 @@ function find(node, id) {
     if (found) return found;
   }
   return null;
+}
+
+// <mod>.browser (cmd-shift-b, the palette): show the browser panel, or hide it when it already shows.
+function toggleBrowser() {
+  const root = layout(), panel = find(root, "panel"), body = find(root, "panel-body");
+  if (!find(root, "browser")) return;
+  if (panel && !panel.hidden && body?.active === "browser") run("layout.hide", { id: "panel" });
+  else { run("layout.select", { stack: "panel-body", child: "browser" }); run("layout.show", { id: "panel" }); }
 }
 
 // Same as the agents mod: drops a status glyph, keeps a leading bracket or quote.
@@ -28,7 +36,8 @@ function label(tab, lead) {
 }
 
 export default class Tabs extends View {
-  init() {
+  init(_props, cx) {
+    if (!checking()) cx.spawn(async (cx) => { for (;;) { if ((await nextCommand()) === "browser") toggleBrowser(); cx.notify(); } });
     this.pressed = null;
     this.scroll = ScrollHandle.new();
     try { this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}"); } catch { this.panels = {}; }
