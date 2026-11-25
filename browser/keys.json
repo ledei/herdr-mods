@@ -1,0 +1,3 @@
+{
+  "layout:browser": { "cmd-shift-b": "tabs-browser.browser" }
+}

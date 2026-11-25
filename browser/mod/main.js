@@ -5,7 +5,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input } from "gpui-base";
-import { exec, appHome, checking, notify, nextCommand, theme, spaces, panes, shared, openOverlay } from "herdr";
+import { exec, appHome, checking, notify, nextCommand, theme, spaces, panes, shared, openOverlay, layout, window, run } from "herdr";
 import net from "net";
 import { readFile, exists } from "fs/promises";
 
@@ -23,6 +23,20 @@ const KEYS_ID = JSON.stringify(BINDINGS); // part of the signature: a hot reload
 // that apply clears our bindings again: keep rebinding this long after the file changes.
 const KEYS_SETTLE = 12000;
 const MAX_TABS = 9; // the helper's limit per group
+const OPEN = "herdr-browser.open"; // {url, at}: a localhost link from a terminal (see link.js)
+
+const findNode = (n, id) => (n?.id === id ? n : (n?.children ?? []).map((c) => findNode(c, id)).find(Boolean));
+// The docked panel is open on the browser: true even when Herdr skips a frame (it can stall about every 30 s), which
+// "did this copy draw since the last tick" alone reads as closed, hiding the page until the pointer moves over it.
+const panelOpen = () => {
+  const root = layout(), panel = findNode(root, "panel"), body = findNode(root, "panel-body");
+  return Boolean(panel && !panel.hidden && body?.active === "browser" && window()?.visible !== false);
+};
+
+// Each layout docks the panel with its own margins: remember the last measured ones per layout (named by its tab
+// bar's mod), so a panel opened from a key or a link shows the page before the pointer has crossed it.
+const tabsMod = (n) => (n?.id === "tabs" && n.content?.mod) || (n?.children ?? []).map(tabsMod).find(Boolean);
+const gapsKey = () => `gaps:${tabsMod(layout()) ?? "?"}`;
 
 const utf8 = (bytes) => decodeURIComponent(Array.from(bytes, (b) => "%" + b.toString(16).padStart(2, "0")).join(""));
 
@@ -224,9 +238,17 @@ export default class Browser extends View {
       this.state = { ...this.state, selecting: Boolean(m.on), pickAgent: m.on ? m.agent ?? null : null };
     } else if (m.ev === "picked") {
       this.state = { ...this.state, selecting: false, pickAgent: null };
+      if (m.cancel || m.agent) this.multiPick = false;
       if (!m.cancel) {
         if (m.agent) notify({ title: `Element sent to ${m.agent}`, body: m.summary ?? "Element", level: "success" });
-        else notify({ title: "Element copied", body: `${m.summary ?? "Element"} — XML copied to clipboard; paste it into the chat`, level: "success" });
+        else if (this.multiPick) {
+          // The helper put the XML on the clipboard: paste it into the focused terminal (no Enter), then pick again,
+          // so several elements gather in the agent's prompt before the person writes and sends it. Esc or Select stops.
+          run("terminal.paste");
+          this.state = { ...this.state, selecting: true };
+          this.tabOp("pick", { on: true });
+          notify({ title: "Element added to the terminal", body: `${m.summary ?? "Element"} — pick another, or Esc to stop`, level: "success" });
+        } else notify({ title: "Element copied", body: `${m.summary ?? "Element"} — XML copied to clipboard; paste it into the chat`, level: "success" });
       }
     } else if (m.ev === "error") return this.showError(String(m.message ?? "Browser error"), cx);
     else return;
@@ -263,6 +285,17 @@ export default class Browser extends View {
     this.nraw({ op: "tab", url: "about:blank" });
   }
 
+  // A link from link.js: open it in the active tab when that is empty, else in a new tab. Only a copy that drew
+  // (the shown panel) takes it, and only once; a request older than 15 s is stale.
+  openRequested() {
+    const o = shared(OPEN);
+    if (!this.rendered || !this.groups || !o?.url || !(o.at > (this.openedAt ?? 0)) || Date.now() - o.at > 15000) return;
+    this.openedAt = o.at;
+    const a = this.state.tabs?.find((t) => t.active), n = this.state.tabs?.length ?? 0;
+    if (!a?.url || a.url === "about:blank" || n >= MAX_TABS) this.tabOp("go", { url: o.url });
+    else this.nraw({ op: "tab", group: this.state.group, url: o.url });
+  }
+
   // An op on the active tab of the shown group; the helper reads the tab's string id.
   tabOp(op, extra) {
     const id = this.state.tabs?.find((t) => t.active)?.id;
@@ -278,10 +311,12 @@ export default class Browser extends View {
     try { vp = globalThis.window.viewport_size(); } catch { return; }
     this.gapR = vp.width - (b.x + b.width);
     this.gapB = vp.height - (b.y + b.height);
+    try { localStorage.setItem(gapsKey(), JSON.stringify([this.gapR, this.gapB])); } catch {}
     this.nativeSync();
   }
 
   pageRect() {
+    if (this.gapR == null) { try { [this.gapR, this.gapB] = JSON.parse(localStorage.getItem(gapsKey()) ?? "[null,null]"); } catch {} }
     if (this.gapR == null || !this.size) return null;
     let vp;
     try { vp = globalThis.window.viewport_size(); } catch { return null; }
@@ -309,6 +344,7 @@ export default class Browser extends View {
   nativeTick(cx) {
     if (!this.nsock) { this.rendered = false; return; }
     this.seedUser();
+    this.openRequested();
     if (this.dialogOpen()) {
       if (this.shown) { this.nraw({ op: "hide" }); this.shown = false; this.lastRect = ""; }
       this.rendered = false;
@@ -316,10 +352,11 @@ export default class Browser extends View {
     }
     const bg = theme().background; // an empty tab and the window show this until a page paints
     if (bg && bg !== this.sentBg && this.nsock === this.themeSock) { this.sentBg = bg; this.nraw({ op: "theme", bg }); }
-    if (this.rendered) this.nativeSync();
+    const open = panelOpen();
+    if (this.rendered || open) this.nativeSync();
     else if (this.shown) { this.nraw({ op: "hide" }); this.shown = false; this.lastRect = ""; }
     this.rendered = false;
-    if (this.shown) cx.notify(); // draws again only if shown: that is what the next lease checks
+    if (this.shown || open) cx.notify(); // draws again only if shown: that is what the next lease checks
   }
 
   showError(text, cx) {
@@ -351,6 +388,7 @@ export default class Browser extends View {
   }
 
   setSelect(on, cx) {
+    this.multiPick = on;
     this.state = { ...this.state, selecting: on, pickAgent: null };
     this.tabOp("pick", { on });
     cx.notify();

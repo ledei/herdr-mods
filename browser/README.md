@@ -21,13 +21,18 @@ from Xcode or the Command Line Tools) and, if `cargo` is installed, `herdr-brows
 
 ## Use
 
-- Move the pointer over the page once after opening the panel: the mod learns where the page area is from
-  a mouse event.
+- **Open and close** with the **Browser** pill, the palette's "Toggle browser", or cmd-shift-b. For the key,
+  add `"layout:browser": { "cmd-shift-b": "tabs-browser.browser" }` to `keys.json` (see `keys.json` here).
+- The first time in a layout, move the pointer over the page once: the mod learns where the page area is from a
+  mouse event, then remembers it for that layout.
+- **Localhost links** (`localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`) that you Cmd-click in a terminal open in
+  the panel, in a new tab unless the active one is empty. Other links go to your usual browser.
 - Address bar, back, forward, reload and tabs are in the panel. Shortcuts while the page has the
   keyboard: cmd-R and shift-cmd-R (reload, ignoring the cache), cmd-[ and cmd-] (history), cmd-T, cmd-W,
   cmd-L and cmd-1 to cmd-9; cmd-C, V, X, A and Z work in the page.
-- **Select** picks an element on the page and copies it as XML (tag, box, text, styles, ancestors, HTML and a
-  screenshot path) to paste into an agent's chat.
+- **Select** picks elements on the page. Each one is pasted as XML (tag, box, text, styles, ancestors, HTML and a
+  screenshot path) into the focused terminal, without Enter, and Select stays on: pick several, then write
+  your message to the agent and send it. Esc or Select again stops.
 - **Sign-ins** copies the sign-ins of sites you pick from one of your Chrome profiles into the view. It
   reads Chrome's cookie file and needs its Keychain key: macOS asks once (choose Always Allow to stop the
   prompt). It needs `herdr-browser` (`cargo`) and Chrome, and only for importing.
@@ -50,7 +55,7 @@ The native view is a separate window over a hole the panel leaves, as in [ios-si
 (`<port>\n<token>`, mode 0600), one per Herdr process. The first line from the mod is
 `{"op":"hello","token":…,"v":2,"role":"panel"}`; lines are JSON. Agents connect the same way with
 `role:"agent"` (the `herdr-browser` front) and the cookie import with `role:"cookies"`. The mod sends `rect` (the page area in window units plus the
-window size) and `lease` every 250 ms while the panel draws: without a lease the window hides. It also sends
+window size) and `lease` every 250 ms while the panel is open (from the layout, so a skipped frame does not count as closed): without a lease for 3 s the window hides. It also sends
 `tab`, `select`, `close`, `go`, `back`, `forward`, `reload`, `reloadHard`, `pick`, `theme` and `cookies`.
 The helper answers with `tab` (url, title, loading, history state, active), `key` (shortcuts it took),
 `picked` and `cookies`. It places its window above Herdr's with
